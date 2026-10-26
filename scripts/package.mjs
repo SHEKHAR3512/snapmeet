@@ -18,5 +18,11 @@ if (forbidden.length) throw new Error(`Refusing to package: ${forbidden.join(', 
 mkdirSync(join(root, 'release'), { recursive: true });
 const zip = join(root, 'release', `snapmeet-${version}.zip`);
 rmSync(zip, { force: true });
-execFileSync('zip', ['-q', '-r', '-X', zip, '.'], { cwd: dist });
+try {
+  execFileSync('zip', ['-q', '-r', '-X', zip, '.'], { cwd: dist });
+} catch {
+  // Fallback for Windows where zip is not installed
+  execFileSync('tar.exe', ['-a', '-c', '-f', zip, '*'], { cwd: dist });
+}
 console.log(`[package] ${relative(root, zip)} (${files.length} files, ${(statSync(zip).size / 1e6).toFixed(1)} MB)`);
+

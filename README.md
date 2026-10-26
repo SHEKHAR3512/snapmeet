@@ -65,7 +65,21 @@ SnapMeet wraps getUserMedia (only when you've switched it on)
 
 More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## 🚀 Quick start
+## 📥 How to Install in Chrome (Free & No Setup Required)
+
+You do **not** need Node.js or any programming knowledge to use SnapMeet:
+
+1. **Download the latest release:** Go to [**Releases**](https://github.com/SHEKHAR3512/snapmeet/releases/latest) and download `snapmeet-vX.X.X.zip`.
+2. **Extract the ZIP file** to a permanent folder on your computer.
+3. Open **Google Chrome** and navigate to `chrome://extensions/`.
+4. In the top-right corner, switch **Developer mode** to **ON**.
+5. In the top-left corner, click **Load unpacked** and select the unzipped folder.
+6. Click the SnapMeet icon in your Chrome toolbar → turn on **Use SnapMeet in Google Meet**.
+7. Join [Google Meet](https://meet.google.com) and enjoy!
+
+---
+
+## 🛠️ For Developers (Build from source)
 
 **Requirements:** desktop Chrome 116+ with hardware acceleration, Node.js 22+.
 

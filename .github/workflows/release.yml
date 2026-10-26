@@ -1,0 +1,53 @@
+name: Release Chrome Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name (e.g. v0.1.0)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and package extension
+        run: npm run package
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: SnapMeet ${{ github.event.inputs.tag || github.ref_name }}
+          files: release/*.zip
+          generate_release_notes: true
+          body: |
+            ## 🚀 How to Install SnapMeet in Google Chrome (Free)
+
+            1. Download the **`snapmeet-*.zip`** asset attached below.
+            2. **Unzip / extract** the downloaded file into a folder on your computer.
+            3. Open **Google Chrome** and navigate to `chrome://extensions`.
+            4. In the top-right corner, switch **Developer mode** to **ON**.
+            5. In the top-left corner, click **Load unpacked**.
+            6. Select the extracted folder containing `manifest.json`.
+            7. Done! Open [Google Meet](https://meet.google.com) and start using SnapMeet!
