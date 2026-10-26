@@ -1,0 +1,8 @@
+.pg { max-width: 1400px; margin: 0 auto; padding: 20px 16px 48px; }
+.pg-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px; }
+.pg-main { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; align-items: start; }
+.pg-videos { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-top: 12px; }
+.pg-videos figure { margin: 0; }
+.pg-videos video { width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; display: block; object-fit: contain; }
+.pg-side { position: sticky; top: 16px; }
+@media (max-width: 960px) { .pg-main { grid-template-columns: 1fr; } .pg-side { position: static; } }

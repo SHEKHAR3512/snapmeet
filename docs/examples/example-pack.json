@@ -1,0 +1,55 @@
+{
+  "packId": "example-starter-pack",
+  "packVersion": "1.0.0",
+  "schemaVersion": 1,
+  "title": "Example starter collection",
+  "minExtensionVersion": "0.1.0",
+  "effects": [
+    {
+      "id": "kya-baat-hai",
+      "schemaVersion": 1,
+      "template": "success-title",
+      "title": "Kya Baat Hai!",
+      "description": "Success title with a Hindi praise caption.",
+      "regions": ["IN"],
+      "languages": ["hi", "en"],
+      "tags": ["praise", "win"],
+      "durationMs": 3500,
+      "requires": [],
+      "minExtensionVersion": "0.1.0",
+      "assetIds": [],
+      "parameters": { "title": "KYA BAAT HAI!", "subtitle": "WAAH +" },
+      "addedAt": "2026-10-26",
+      "reviewedAt": "2026-10-26",
+      "badge": "new",
+      "sources": [{ "url": "https://example.com/curation-notes/kya-baat-hai", "checkedAt": "2026-10-26" }],
+      "attributionIds": ["example-original"]
+    },
+    {
+      "id": "what-a-twist",
+      "schemaVersion": 1,
+      "template": "dramatic-zoom",
+      "title": "What a Twist",
+      "description": "Two quick punch-ins with an English caption.",
+      "regions": ["US", "GLOBAL"],
+      "languages": ["en"],
+      "tags": ["drama", "zoom"],
+      "durationMs": 3000,
+      "requires": [],
+      "minExtensionVersion": "0.1.0",
+      "assetIds": [],
+      "parameters": { "caption": "WHAT A TWIST", "punches": 2, "tint": false, "maxZoom": 1.3 },
+      "addedAt": "2026-10-26",
+      "attributionIds": ["example-original"]
+    }
+  ],
+  "attributions": [
+    {
+      "id": "example-original",
+      "kind": "original",
+      "author": "Example curator",
+      "license": "CC0-1.0",
+      "notes": "Captions written for this example; visuals come from bundled templates."
+    }
+  ]
+}

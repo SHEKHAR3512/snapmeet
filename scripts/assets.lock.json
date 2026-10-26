@@ -1,0 +1,19 @@
+{
+  "comment": "Pinned third-party runtime assets bundled into the extension. Verified on every build.",
+  "assets": [
+    {
+      "path": "public/models/selfie_segmenter_landscape.tflite",
+      "sha256": "490e9ea734313e0de10fa0cd9e3c6133e36ea4db2b7a49bde9ef019f72796b8e",
+      "source": "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter_landscape/float16/latest/selfie_segmenter_landscape.tflite",
+      "retrieved": "2026-10-26",
+      "license": "Apache-2.0 (MediaPipe Selfie Segmentation model card)"
+    },
+    {
+      "path": "public/models/hand_landmarker.task",
+      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "source": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+      "retrieved": "2026-10-26",
+      "license": "Apache-2.0 (MediaPipe Hands model card)"
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "SnapMeet",
+  "version": "__VERSION__",
+  "description": "Real-time meme effects on your outgoing Google Meet camera. Processed locally; nothing is uploaded.",
+  "minimum_chrome_version": "116",
+  "icons": { "16": "assets/icon-16.png", "32": "assets/icon-32.png", "48": "assets/icon-48.png", "128": "assets/icon-128.png" },
+  "action": {
+    "default_title": "SnapMeet",
+    "default_popup": "popup.html",
+    "default_icon": { "16": "assets/icon-16.png", "32": "assets/icon-32.png" }
+  },
+  "options_page": "options.html",
+  "background": { "service_worker": "service-worker.js", "type": "module" },
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["https://meet.google.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["main-bootstrap.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "vision-worker.js",
+        "wasm/vision_wasm_internal.js",
+        "wasm/vision_wasm_internal.wasm",
+        "models/selfie_segmenter_landscape.tflite",
+        "models/hand_landmarker.task"
+      ],
+      "matches": ["https://meet.google.com/*"]
+    }
+  ],
+  "commands": {
+    "trigger-selected": { "suggested_key": { "default": "Alt+Shift+S" }, "description": "Play the selected effect" },
+    "reappear": { "suggested_key": { "default": "Alt+Shift+A" }, "description": "Reappear / return to camera" },
+    "reset-effects": { "suggested_key": { "default": "Alt+Shift+X" }, "description": "Reset effects" },
+    "toggle-dock": { "suggested_key": { "default": "Alt+Shift+M" }, "description": "Show or hide the SnapMeet controls" }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+playwright-report/
+test-results/
+public/wasm/
+*.log
+.DS_Store
+tests/e2e/.harness/
