@@ -39,7 +39,7 @@ export interface Ext {
   close(): Promise<void>;
 }
 
-export async function launchWithExtension(): Promise<Ext> {
+export async function launchWithExtension(opts: { videoFile?: string } = {}): Promise<Ext> {
   const userDataDir = mkdtempSync(join(tmpdir(), 'snapmeet-e2e-'));
   const context = await chromium.launchPersistentContext(userDataDir, {
     channel: 'chromium',
@@ -50,6 +50,7 @@ export async function launchWithExtension(): Promise<Ext> {
       '--use-fake-device-for-media-stream',
       '--use-fake-ui-for-media-stream',
       '--autoplay-policy=no-user-gesture-required',
+      ...(opts.videoFile ? [`--use-file-for-fake-video-capture=${opts.videoFile}`] : []),
     ],
   });
   await context.grantPermissions(['camera', 'microphone'], { origin: 'https://meet.google.com' });
@@ -151,7 +152,9 @@ async function installHelpers(page: Page): Promise<void> {
           }
         }
         const n = d.length / 4;
-        return { meanSat: sat / n, meanLuma: luma / n, topBandLuma: topBand / topCount, lumas, width: v.videoWidth, height: v.videoHeight };
+        let green = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i + 1]! > 120 && d[i]! < 80 && d[i + 2]! < 110) green++;
+        return { meanSat: sat / n, meanLuma: luma / n, topBandLuma: topBand / topCount, lumas, width: v.videoWidth, height: v.videoHeight, green: green / n };
       },
       async receiverStats() {
         const [, b] = w.__pcs as RTCPeerConnection[];

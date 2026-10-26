@@ -12,7 +12,8 @@
   },
   "options_page": "options.html",
   "background": { "service_worker": "service-worker.js", "type": "module" },
-  "permissions": ["storage", "scripting"],
+  "permissions": ["storage", "scripting", "alarms"],
+  "optional_host_permissions": ["https://*/*"],
   "host_permissions": ["https://meet.google.com/*"],
   "content_scripts": [
     {

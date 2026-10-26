@@ -58,7 +58,17 @@ export function GesturesTab({ api, ui }: { api: ControllerApi; ui: UiState }) {
         <div className="sm-banner" role="status" aria-live="polite" style={{ marginTop: 8 }}>
           <div style={{ flex: 1 }}>
             <div className="sm-row" style={{ minHeight: 24 }}>
-              <span>{status?.vision !== 'ready' ? 'Tracking not running' : snap?.tracked ? 'Hand tracked' : 'No hand in view'}</span>
+              <span>
+                {!settings.snapEnabled && !settings.palmsEnabled && !cal?.active
+                  ? 'Hand tracking is off'
+                  : status?.vision === 'loading'
+                    ? 'Loading hand tracking…'
+                    : status?.vision !== 'ready'
+                      ? 'Hand tracking unavailable'
+                      : snap?.tracked
+                        ? 'Hand tracked'
+                        : 'No hand in view'}
+              </span>
               <span className="sm-chip">
                 {recentGesture?.gesture === 'snap'
                   ? 'Snap!'
