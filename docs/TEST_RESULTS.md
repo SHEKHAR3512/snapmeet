@@ -57,7 +57,7 @@ Meet-header stand-in) → **real-Meet-verified**. Nothing is real-Meet-verified 
 
 ### Soak (`npm run test:probes`, SNAPMEET_SOAK_MIN=30)
 
-Effect every 20 s, snap tracking on, data at the first 22 minutes (run in progress when recorded):
+Completed: 30.4 minutes, passed. Effect every 20 s, snap tracking on.
 
 | Minute | JS heap | DOM nodes | Listeners |
 | --- | --- | --- | --- |
@@ -66,11 +66,12 @@ Effect every 20 s, snap tracking on, data at the first 22 minutes (run in progre
 | 10 | 7.1 MB | 758 | 342 |
 | 15 | 7.9 MB | 1139 | 413 |
 | 22 | 7.3 MB | 1132 | 369 |
+| 30 | 7.7 MB | 1139 | 363 |
 
 Heap is flat (6.4–7.9 MB, no monotonic growth). DOM nodes stepped once at minute 11
 (756 → 1130) and stayed flat — consistent with dock content (notice/diagnostics rows), not
-a leak, but worth a look. One pipeline and one live camera track throughout; frames and
-audio kept arriving at the receiver. GPU/native memory was not measured.
+a leak, but worth a look. One pipeline and one live camera track throughout; the receiver
+decoded 36,264 frames and 90,758 audio packets. GPU/native memory was not measured.
 
 ## Not yet tested (pending, with reason)
 
