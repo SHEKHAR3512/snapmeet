@@ -1,105 +1,206 @@
+<div align="center">
+
+<img src="public/assets/icon-128.png" width="96" alt="SnapMeet icon" />
+
 # SnapMeet
 
-A Chrome extension that turns **your own outgoing Google Meet camera** into real-time meme
-effects — snap (or press a button) and dissolve into dust, go Absolute Cinema, flex an
-Aura +9999. Other participants see the effect in your video without installing anything.
-Everything runs locally in your browser: no servers, accounts, paid APIs or uploads.
+**Snap your fingers in Google Meet and dissolve into dust.**
 
-> **Status: beta, real-Meet validation pending.** The camera pipeline, effects and vision
-> runtime are verified in automated tests against a stand-in page that uses Google Meet's
-> exact security headers, and over a real WebRTC connection. A two-person test in an actual
-> Meet call has not been run yet — see [docs/FEASIBILITY.md](docs/FEASIBILITY.md#manual-meet-validation-pending--needs-two-devicesaccounts).
-> Snap detection is **experimental**.
+A Chrome extension that adds real-time meme effects to *your own* outgoing Meet camera.
+Everyone else in the call sees them, and they don't need to install anything.
 
-## Effects
+100% local · no servers · no accounts · no paid APIs · nothing uploaded
 
-| Effect | What others see | Needs setup |
+</div>
+
+> [!IMPORTANT]
+> **Beta.** The camera pipeline, all eight effects and the on-device AI are covered by
+> automated tests that run against a page using Google Meet's exact security headers and
+> a real WebRTC connection. A test in a live two-person Meet call is **still pending**, and
+> finger-snap detection is **experimental**. See [Status](#status).
+
+---
+
+## ✨ Effects
+
+| | Effect | What the other participants see |
 | --- | --- | --- |
-| Dust Away | Your body dissolves into dust; the empty room (or a virtual background) stays | Empty-room capture or virtual background |
-| Absolute Cinema | Monochrome, letterbox bars, film grain, title card | — |
-| Aura +9999 | Glowing outline and a counting score | — |
-| Indian Serial Drama | Three dramatic zoom punches with soft tints | — |
-| Aayein? | Freeze frame, floating question marks | — |
-| Emotional Damage | Short shake, punch-in, impact caption | — |
-| This Is Fine | Original procedural flames and a calm speech bubble | — |
-| Mission Passed | Game-inspired success title | — |
+| 🫥 | **Dust Away** | Your body disintegrates into drifting dust; your empty room (or a virtual background) stays. You keep talking the whole time. |
+| 🎬 | **Absolute Cinema** | Black-and-white grade, letterbox bars, film grain and a title card. |
+| 💜 | **Aura +9999** | A glowing outline around you and a score that counts up. |
+| 📺 | **Indian Serial Drama** | Three dramatic zoom punches toward your face with tinted shock frames. |
+| ❓ | **Aayein?** | Freeze frame with bouncing question marks. |
+| 💥 | **Emotional Damage** | A quick shake, punch-in and impact caption. |
+| 🔥 | **This Is Fine** | Original illustrated flames around the frame and a calm speech bubble. |
+| 🏆 | **Mission Passed** | A game-style success title card. |
 
-Plus two variants (Main Character Energy, Plot Twist). More can be added as data-only
-collections — see [docs/EFFECT_AUTHORING.md](docs/EFFECT_AUTHORING.md).
+Plus *Main Character Energy* and *Plot Twist* variants. New effects can be added as small
+JSON collections, without writing code — see [Effect authoring](docs/EFFECT_AUTHORING.md).
 
-## Requirements
+Trigger effects by **clicking**, with **keyboard shortcuts**, or (experimental) by
+**snapping your fingers** / **raising both palms**.
 
-* Desktop Google Chrome 116+ (or Chromium) with WebGL2. Tested with Chromium 156.
-* Node.js 22+ to build.
+## 🧠 How it works
 
-## Install (unpacked)
-
-```bash
-npm install          # also copies the MediaPipe WASM runtime into public/wasm
-npm run build        # verifies pinned model hashes, writes dist/
+```
+Google Meet asks for your camera
+        │
+        ▼
+SnapMeet wraps getUserMedia (only when you've switched it on)
+        │
+        ├── microphone ─────────────────────────────── passed through untouched ──┐
+        │                                                                          │
+        └── camera frames ─► WebGL2 effects renderer ─► processed video track ─────┴─► Meet
+                   │                    ▲
+                   └─► MediaPipe (in a worker): person mask + hand landmarks
 ```
 
-1. Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, choose `dist/`.
-2. Click the SnapMeet toolbar icon and switch on **Use SnapMeet in Google Meet**.
-3. Join (or reload) a Meet call. If you were already in the call, turn your camera off and
-   on once — SnapMeet cannot replace a camera Meet already opened.
+* Runs inside the Meet tab — the effect is part of the video Meet sends, so the other
+  side needs nothing installed.
+* Person segmentation and hand tracking use Google's MediaPipe models **bundled in the
+  extension** and running in a background worker, so Meet's own UI stays smooth.
+* Dust Away particles are simulated entirely on the GPU.
+* Privacy fail-safe: if anything breaks while you're "vanished", SnapMeet sends a neutral
+  *Video paused* frame instead of suddenly revealing your camera.
 
-`npm run package` produces `release/snapmeet-<version>.zip`.
-**Uninstall:** remove it in `chrome://extensions`; Meet goes back to your normal camera
-immediately after a reload.
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Use
+## 🚀 Quick start
 
-* A small **SnapMeet** panel appears at the bottom-left of Meet. Click an effect card to
-  play it. **Reset** is always visible, even when collapsed.
-* **Dust Away:** open **Setup**, choose *Empty room* (a 5-second countdown, step out of the
-  frame) or a *Virtual* background, then play it. While vanished you stay connected and
-  audible; press **Reappear** or wait for the timer (3/5/10 s or stay vanished).
-* **Snap to trigger (experimental):** Gestures tab → turn on, practise 5 snaps, adjust
-  sensitivity. Buttons and shortcuts always work.
-* **Shortcuts:** `Alt+Shift+S` play selected · `Alt+Shift+A` reappear / return to camera ·
-  `Alt+Shift+X` reset · `Alt+Shift+M` show/hide controls. Change them at
-  `chrome://extensions/shortcuts`. They are ignored while typing in chat.
-* **Playground:** popup → *Open playground* (or `npm run dev`) to try effects on your own
-  camera, check what a WebRTC receiver gets, and run gesture trials.
-* Your self-view in Meet is mirrored, so captions look reversed **to you** — others see
-  them the right way round.
-
-## Troubleshooting
-
-| Symptom | Fix |
-| --- | --- |
-| "Meet started your camera before SnapMeet was on" | Toggle the camera off/on (Ctrl+E twice) or reload before joining. |
-| "SnapMeet is not connected to this tab" | Reload the Meet tab (happens after installing/updating). |
-| Dust Away says it needs setup | Setup tab → capture the empty room or pick a virtual background. |
-| "No person detected" / "Finding you in the frame" | Sit centred with your head and shoulders visible and decent light. |
-| Room capture warns the camera moved / light changed | Recapture the empty room. |
-| Video shows "Video paused" | Privacy fallback after an error or camera restart while vanished: press **Return to camera**. |
-| Effects are disabled, WebGL2 unavailable | Enable hardware acceleration in Chrome settings. |
-| Choppy video | Setup → lower quality; leave *Lower quality automatically* on. Diagnostics shows timings. |
-
-## Development
+**Requirements:** desktop Chrome 116+ with hardware acceleration, Node.js 22+.
 
 ```bash
-npm run dev          # playground on a Vite dev server
-npm run typecheck && npm run lint
-npm test             # unit tests (Vitest)
-npm run test:e2e     # build + Playwright (loads dist/ into Chromium; needs `npx playwright install chromium`)
-npm run test:probes  # evidence probes: diagnostics dump, worker probe, screenshots, soak (SNAPMEET_SOAK_MIN)
+git clone https://github.com/SHEKHAR3512/snapmeet.git
+cd snapmeet
+npm install        # also copies the MediaPipe WASM runtime into public/wasm
+npm run build      # verifies model checksums and writes the extension to dist/
+```
+
+1. Open `chrome://extensions` → enable **Developer mode** → **Load unpacked** → pick `dist/`.
+2. Click the SnapMeet toolbar icon → switch on **Use SnapMeet in Google Meet**.
+3. Join a Meet call. *(Already in a call? Turn your camera off and on once.)*
+4. Use the **SnapMeet** panel at the bottom-left of Meet.
+
+For Dust Away, first open **Setup** and either capture your empty room (5-second countdown —
+step out of the frame) or choose a virtual background.
+
+### ⌨️ Shortcuts
+
+| Keys | Action |
+| --- | --- |
+| `Alt+Shift+S` | Play the selected effect |
+| `Alt+Shift+A` | Reappear / return to camera |
+| `Alt+Shift+X` | Reset effects |
+| `Alt+Shift+M` | Show / hide the controls |
+
+Change them at `chrome://extensions/shortcuts`. They're ignored while you type in chat.
+
+### 🧪 Try it without joining a call
+
+The **playground** (popup → *Open playground*, or `npm run dev`) runs the same engine on
+your camera, shows what a WebRTC receiver gets, and includes a gesture-trial recorder.
+
+## 📷 Testing in a real Meet call without a webcam
+
+Start Chrome with a fake camera that plays a video file:
+
+```bash
+# macOS — quit Chrome first (Cmd+Q)
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --user-data-dir="$HOME/snapmeet-test-profile" \
+  --use-fake-device-for-media-stream \
+  --use-file-for-fake-video-capture="$PWD/tests/fixtures/synthetic-figure.y4m"
+```
+
+Load `dist/` in that window, switch SnapMeet on, enable **Proof mode** in Settings, and
+join a meeting from a second device (e.g. your phone). The phone should show grayscale video
+with a moving **SNAPMEET PROOF** watermark. Keep the fake microphone muted — it beeps.
+
+To use a clip of yourself instead (loops automatically):
+
+```bash
+ffmpeg -i me.mp4 -t 15 -vf scale=1280:720,fps=30 -pix_fmt yuv420p me.y4m
+```
+
+No luck with the flags? Use [OBS](https://obsproject.com/) → Media Source → **Start Virtual Camera**.
+The full checklist is in [docs/FEASIBILITY.md](docs/FEASIBILITY.md#manual-meet-validation-pending--needs-two-devicesaccounts).
+
+## 🔒 Privacy
+
+* Video is processed **on your device**. It is never recorded, uploaded or stored.
+* Your microphone and screen sharing are never modified.
+* Room captures and custom backgrounds live in memory for that tab only.
+* No analytics, no accounts. Opening the popup never turns on your camera.
+* The only optional network request is a remote effect collection *you* configure.
+
+Full policy: [docs/PRIVACY.md](docs/PRIVACY.md).
+
+## 🛠️ Development
+
+```bash
+npm run dev           # playground on a Vite dev server
+npm run typecheck     # TypeScript
+npm run lint          # ESLint
+npm test              # unit tests (Vitest)
+npx playwright install chromium
+npm run test:e2e      # build + browser tests (extension loaded into Chromium)
+npm run test:probes   # measurements: diagnostics, worker probe, screenshots, soak
+npm run package       # release/snapmeet-<version>.zip
 npm run catalog:validate -- docs/examples/example-pack.json
 ```
 
-Docs: [Architecture](docs/ARCHITECTURE.md) · [Feasibility](docs/FEASIBILITY.md) ·
-[Test results](docs/TEST_RESULTS.md) · [Effect authoring](docs/EFFECT_AUTHORING.md) ·
-[Privacy](docs/PRIVACY.md) · [Third-party notices](THIRD_PARTY_NOTICES.md) · [Tasks](TASKS.md)
+The e2e suite serves a stand-in page at `https://meet.google.com/…` with Meet's real
+Content-Security-Policy and Trusted Types headers, sends SnapMeet's output over a real
+`RTCPeerConnection`, and measures what the receiver decodes (e.g. that a vanished user is
+background-only, that the mic keeps flowing, that the camera is released).
 
-## Known limitations
+### Project layout
 
-* Real-Meet compatibility and hidden/minimised-tab behaviour are not yet verified.
-* SnapMeet must be on before Meet opens the camera (or the camera toggled afterwards).
-* The empty-room background is a still image: moving the camera or changing light breaks
-  the illusion until you recapture. Unseen pixels behind you are never invented.
-* Dust Away briefly freezes your silhouette at the snap while it dissolves (artistic choice).
-* Snap recognition is a heuristic, unmeasured on real hands; the palms gesture likewise.
-* Fonts are system font stacks; on systems without Impact/Didot captions use fallbacks.
-* No audio effects (planned for V2).
+```
+src/
+  bridge/      MAIN-world bootstrap, getUserMedia wrapper, track adapters, protocol
+  engine/      pipeline, WebGL2 renderer, quality, backgrounds, diagnostics
+  effects/     effect templates (dust, cinema, aura, …) and sprite/text rendering
+  vision/      MediaPipe runtime, worker, mask processing
+  gestures/    snap / palms detectors, calibration
+  session/     effect state machine
+  catalog/     effect schema, built-in catalog, packs, remote refresh
+  content/     isolated-world controller, shortcuts
+  ui/          dock, popup, options
+  extension/   manifest, service worker
+playground/    local test page
+tests/         unit (Vitest) and e2e (Playwright)
+docs/          architecture, feasibility, privacy, authoring, test results
+```
+
+## 📊 Status
+
+| Area | State |
+| --- | --- |
+| Outgoing video pipeline, effects, recovery, cleanup | ✅ Automated tests (Meet-header stand-in + WebRTC) |
+| Vision under Meet's CSP / Trusted Types (worker, GPU) | ✅ Automated tests |
+| Live two-person Google Meet call | ⏳ Pending manual test |
+| Hidden / minimised tab behaviour | ⏳ Pending manual test |
+| Finger-snap accuracy on real hands | 🧪 Experimental, off by default |
+
+Progress and next steps: [TASKS.md](TASKS.md) · Results: [docs/TEST_RESULTS.md](docs/TEST_RESULTS.md)
+
+### Known limitations
+
+* SnapMeet must be on before Meet opens your camera (or toggle the camera afterwards).
+* The empty-room background is a still photo; moving the camera or changing the light means recapturing.
+* Dust Away briefly freezes your silhouette at the snap while it dissolves (an artistic choice).
+* Captions look mirrored in *your* self-view because Meet mirrors it; others see them correctly.
+* Uses system fonts; on machines without Impact/Didot, fallbacks are used.
+
+## 🤝 Contributing
+
+Issues and pull requests are welcome — especially results from real Meet calls (include
+your Chrome version, OS and a screenshot of the Diagnostics tab), new effect collections,
+and snap-detection trial data.
+
+## ⚖️ Notes
+
+SnapMeet is an independent project and is **not affiliated with or endorsed by Google**.
+"Google Meet" is a trademark of Google LLC. All effect visuals are original; meme names are
+used as references only. Third-party software and models: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
