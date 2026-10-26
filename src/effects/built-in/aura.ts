@@ -14,6 +14,8 @@ uniform float u_time;
 uniform float u_hue;
 uniform float u_aspect;
 uniform float u_motion;
+uniform float u_hero;
+uniform vec2 u_head;
 void main() {
   vec2 uv = img(v_uv);
   vec3 c = texture(u_video, uv).rgb;
@@ -39,6 +41,11 @@ void main() {
   vec3 tint = hsv2rgb(vec3(u_hue / 360.0 + 0.04 * sin(u_time * 1.7 * u_motion), 0.75, 1.0));
   vec3 col = c * mix(1.0, mix(0.72, 1.0, m), u_amount);
   col += tint * glow * 1.5 * u_amount;
+  vec2 ray = (uv - u_head) * vec2(u_aspect, 1.0);
+  float angle = atan(ray.y, ray.x);
+  float rays = pow(max(0.0, sin(angle * 19.0 + u_time * 0.25 * u_motion)), 12.0);
+  rays *= smoothstep(0.12, 0.5, length(ray)) * (1.0 - m);
+  col += tint * rays * 0.28 * u_amount * u_hero;
   o = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`);
 
@@ -61,7 +68,9 @@ export class AuraEffect extends ShaderEffect<'aura'> {
       .f('u_time', t / 1000)
       .f('u_hue', p.hue ?? 275)
       .f('u_aspect', f.inputs.width / f.inputs.height)
-      .f('u_motion', this.reducedMotion ? 0.3 : 1)
+      .f('u_hero', this.def.id === 'main-character' ? 1 : 0)
+      .f('u_head', f.inputs.face?.eyes[0] ?? 0.5, f.inputs.face?.eyes[1] ?? 0.35)
+      .f('u_motion', this.reducedMotion ? 0 : 1)
       .tex('u_video', 0, f.inputs.video)
       .tex('u_mask', 1, f.inputs.mask ?? this.ctx.blank);
     this.ctx.quad.draw();
@@ -92,10 +101,11 @@ export class AuraEffect extends ShaderEffect<'aura'> {
     });
     const aspect = this.outAspect(f);
     // Above the head when there is room, otherwise along the bottom of the frame.
-    const top = f.inputs.maskInfo?.bbox[1] ?? 0.2;
+    const top = f.inputs.face?.forehead[1] ?? f.inputs.maskInfo?.bbox[1] ?? 0.2;
+    const center = Math.max(0.25, Math.min(0.75, f.inputs.face?.eyes[0] ?? 0.5));
     const above = top > 0.3;
     const scoreY = above ? top - 0.17 : 0.78;
-    this.sprites.draw(score, { x: 0.5, y: scoreY, height: 0.11 * pop, maxWidth: 0.7, alpha: textAlpha, outAspect: aspect });
-    this.sprites.draw(label, { x: 0.5, y: scoreY + 0.1, height: 0.05, maxWidth: 0.7, alpha: textAlpha, outAspect: aspect });
+    this.sprites.draw(score, { x: center, y: scoreY, height: 0.11 * pop, maxWidth: 0.7, alpha: textAlpha, outAspect: aspect });
+    this.sprites.draw(label, { x: center, y: scoreY + 0.1, height: 0.05, maxWidth: 0.7, alpha: textAlpha, outAspect: aspect });
   }
 }

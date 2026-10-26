@@ -1,18 +1,8 @@
 import { LM, dist, inFrame, palmSize, type HandObservation, type HandsSample } from './landmarks';
 
-/**
- * Experimental finger-snap heuristic over MediaPipe hand landmarks.
- *
- * A snap is recognized as:
- *   1. PRIMED  — thumb tip and middle-finger tip close together (normalized by palm size);
- *   2. RELEASE — within a short window, the thumb/middle distance opens quickly AND the
- *                middle finger curls into the palm (its tip moves toward the wrist).
- *
- * A sustained pinch that simply opens does not curl the middle finger and is rejected,
- * as is a slow release. One event per sequence, then a cooldown. Each hand is tracked
- * separately; tracking loss, low confidence, out-of-frame landmarks or identity jumps
- * reset that hand's state.
- */
+/** Contact -> rapid finger retraction, normalized to the palm. Wrist continuity
+ * survives handedness flips. Thumb separation OR strong middle-finger retraction
+ * supplies release evidence; pure opening without retraction is rejected. */
 export interface SnapDetectorConfig {
   /** 0 = strict, 1 = permissive. */
   sensitivity: number;
@@ -37,13 +27,13 @@ export function thresholdsFor(sensitivity: number): SnapThresholds {
   const s = Math.min(1, Math.max(0, sensitivity));
   const lerp = (a: number, b: number) => a + (b - a) * s;
   return {
-    close: lerp(0.3, 0.46),
-    open: lerp(0.78, 0.56),
+    close: lerp(0.38, 0.58),
+    open: lerp(0.74, 0.62),
     curl: lerp(0.92, 1.12),
-    curlDrop: lerp(0.32, 0.18),
-    minSpeed: lerp(5.5, 2.6),
-    releaseWindowMs: lerp(200, 300),
-    maxGapMs: 220,
+    curlDrop: lerp(0.24, 0.12),
+    minSpeed: lerp(3.5, 1.5),
+    releaseWindowMs: lerp(260, 420),
+    maxGapMs: 350,
     minScore: 0.5,
     maxWristJump: 0.3,
   };
@@ -61,128 +51,115 @@ export interface SnapFeedback {
   closeness: number | null;
 }
 
+interface Measurement {
+  d: number;
+  curl: number;
+  tipToPalm: number;
+  wristX: number;
+  wristY: number;
+}
 interface HandTrack {
   lastT: number;
   wristX: number;
   wristY: number;
-  primedAt: number | null;
-  lastPrimed: { t: number; d: number; curl: number } | null;
+  primed: { t: number; d: number; curl: number; tipToPalm: number } | null;
+  peakSpeed: number;
+  reason: 'slow-release' | 'no-curl';
 }
-
 const REQUIRED = [LM.WRIST, LM.THUMB_TIP, LM.MIDDLE_MCP, LM.MIDDLE_TIP] as const;
 
 export class SnapDetector {
   private tracks = new Map<'Left' | 'Right', HandTrack>();
   private cooldownUntil = -Infinity;
+  private reservationUntil = -Infinity;
   private th: SnapThresholds;
   private feedback: SnapFeedback = { tracked: false, primed: false, coolingDown: false, closeness: null };
-
-  constructor(private cfg: SnapDetectorConfig) {
-    this.th = thresholdsFor(cfg.sensitivity);
-  }
-
+  constructor(private cfg: SnapDetectorConfig) { this.th = thresholdsFor(cfg.sensitivity); }
   configure(patch: Partial<SnapDetectorConfig>): void {
-    this.cfg = { ...this.cfg, ...patch };
-    this.th = thresholdsFor(this.cfg.sensitivity);
+    this.cfg = { ...this.cfg, ...patch }; this.th = thresholdsFor(this.cfg.sensitivity);
   }
-
-  get thresholds(): Readonly<SnapThresholds> {
-    return this.th;
-  }
-
-  get lastFeedback(): Readonly<SnapFeedback> {
-    return this.feedback;
-  }
-
+  get thresholds(): Readonly<SnapThresholds> { return this.th; }
+  get lastFeedback(): Readonly<SnapFeedback> { return this.feedback; }
+  /** Give a primed snap priority over fist/point poses, including its release tail. */
+  reservesPose(t: number): boolean { return t < this.reservationUntil; }
   reset(): void {
-    this.tracks.clear();
+    this.tracks.clear(); this.cooldownUntil = this.reservationUntil = -Infinity;
+    this.feedback = { tracked: false, primed: false, coolingDown: false, closeness: null };
   }
-
-  /** Feed one landmark sample; returns any recognized events. Timestamps must be monotonic. */
   push(sample: HandsSample): SnapEvent[] {
     const events: SnapEvent[] = [];
     const seen = new Set<'Left' | 'Right'>();
-    let anyPrimed = false;
     let closeness: number | null = null;
-
+    let primed = false;
     for (const hand of sample.hands) {
-      if (seen.has(hand.handedness)) continue; // ambiguous duplicate label: keep first
       const m = this.measure(hand);
       if (!m) continue;
-      seen.add(hand.handedness);
-      closeness = closeness === null ? m.d : Math.min(closeness, m.d);
-      const ev = this.step(hand.handedness, sample.t, m);
-      if (ev) events.push(ev);
-      if (this.tracks.get(hand.handedness)?.lastPrimed && m.d <= this.th.close) anyPrimed = true;
+      // MediaPipe can flip handedness while fingers cross. Track the nearest wrist.
+      const candidates = [...this.tracks].filter(([label, tr]) => !seen.has(label) && sample.t - tr.lastT <= this.th.maxGapMs)
+        .map(([label, tr]) => ({ label, distance: Math.hypot((m.wristX - tr.wristX) * this.cfg.aspect, m.wristY - tr.wristY) }))
+        .sort((a, b) => a.distance - b.distance);
+      const nearest = candidates[0];
+      const label = nearest && nearest.distance < 0.18 ? nearest.label : hand.handedness;
+      if (seen.has(label)) continue;
+      seen.add(label);
+      closeness = Math.min(closeness ?? Infinity, m.d);
+      const event = this.step(label, sample.t, m);
+      if (event) events.push(event);
+      primed ||= !!this.tracks.get(label)?.primed;
     }
-    // Hands not observed in this sample: drop after the allowed gap.
     for (const [label, tr] of this.tracks) {
       if (!seen.has(label) && sample.t - tr.lastT > this.th.maxGapMs) this.tracks.delete(label);
     }
-    this.feedback = {
-      tracked: seen.size > 0,
-      primed: anyPrimed,
-      coolingDown: sample.t < this.cooldownUntil,
-      closeness,
-    };
+    this.feedback = { tracked: seen.size > 0, primed, coolingDown: sample.t < this.cooldownUntil, closeness };
     return events;
   }
-
-  private measure(hand: HandObservation): { d: number; curl: number; wristX: number; wristY: number } | null {
+  private measure(hand: HandObservation): Measurement | null {
     const lm = hand.landmarks;
-    if (hand.score < this.th.minScore || lm.length < 21 || !inFrame(lm, REQUIRED)) return null;
-    const palm = palmSize(lm, this.cfg.aspect);
-    if (palm < 0.035) return null; // hand too small/far to measure reliably
-    return {
-      d: dist(lm[LM.THUMB_TIP]!, lm[LM.MIDDLE_TIP]!, this.cfg.aspect) / palm,
-      curl: dist(lm[LM.MIDDLE_TIP]!, lm[LM.WRIST]!, this.cfg.aspect) / palm,
-      wristX: lm[LM.WRIST]!.x,
-      wristY: lm[LM.WRIST]!.y,
-    };
+    if (lm.length < 21 || hand.score < 0.45 || !inFrame(lm, REQUIRED, 0.08) || lm.some(p => !Number.isFinite(p.x) || !Number.isFinite(p.y))) return null;
+    // Palm width provides a stable fallback when the wrist is foreshortened.
+    const size = Math.max(palmSize(lm, this.cfg.aspect), dist(lm[5]!, lm[17]!, this.cfg.aspect) * 0.85);
+    if (size < 0.025) return null;
+    return { d: dist(lm[4]!, lm[12]!, this.cfg.aspect) / size,
+      curl: dist(lm[12]!, lm[0]!, this.cfg.aspect) / size,
+      tipToPalm: dist(lm[12]!, lm[9]!, this.cfg.aspect) / size,
+      wristX: lm[0]!.x, wristY: lm[0]!.y };
   }
-
-  private step(
-    label: 'Left' | 'Right',
-    t: number,
-    m: { d: number; curl: number; wristX: number; wristY: number },
-  ): SnapEvent | null {
+  private step(label: 'Left' | 'Right', t: number, m: Measurement): SnapEvent | null {
     let tr = this.tracks.get(label);
-    const jumped =
-      tr && Math.hypot((m.wristX - tr.wristX) * this.cfg.aspect, m.wristY - tr.wristY) > this.th.maxWristJump;
-    if (!tr || jumped || t - tr.lastT > this.th.maxGapMs) {
-      tr = { lastT: t, wristX: m.wristX, wristY: m.wristY, primedAt: null, lastPrimed: null };
+    if (tr && t <= tr.lastT) return null;
+    if (!tr || t - tr.lastT > this.th.maxGapMs || Math.hypot((m.wristX - tr.wristX) * this.cfg.aspect, m.wristY - tr.wristY) > this.th.maxWristJump) {
+      tr = { lastT: t, wristX: m.wristX, wristY: m.wristY, primed: null, peakSpeed: 0, reason: 'no-curl' };
       this.tracks.set(label, tr);
     }
-    tr.lastT = t;
-    tr.wristX = m.wristX;
-    tr.wristY = m.wristY;
-
-    if (m.d <= this.th.close) {
-      tr.primedAt ??= t;
-      tr.lastPrimed = { t, d: m.d, curl: m.curl };
+    tr.lastT = t; tr.wristX = m.wristX; tr.wristY = m.wristY;
+    if (t < this.cooldownUntil) { tr.primed = null; return null; }
+    // Do not prime on a resting closed fist whose thumb happens to touch a fingertip.
+    if (m.d <= this.th.close && (m.curl > 1.05 || m.tipToPalm > 0.6)) {
+      tr.primed = { t, d: m.d, curl: m.curl, tipToPalm: m.tipToPalm };
+      tr.peakSpeed = 0;
+      this.reservationUntil = t + this.th.releaseWindowMs + 220;
       return null;
     }
-
-    // Hysteresis band between close and open: neither primed nor released.
-    if (m.d < this.th.open) {
-      if (tr.lastPrimed && t - tr.lastPrimed.t > this.th.releaseWindowMs) tr.lastPrimed = null;
-      return null;
+    const p = tr.primed;
+    if (!p) return null;
+    const dt = t - p.t;
+    if (dt > this.th.releaseWindowMs) {
+      tr.primed = null;
+      return { type: 'near-miss', t, hand: label, reason: tr.reason };
     }
-
-    // Opened.
-    const primed = tr.lastPrimed;
-    tr.lastPrimed = null;
-    tr.primedAt = null;
-    if (!primed) return null;
-    const dt = t - primed.t;
-    if (dt <= 0 || dt > this.th.releaseWindowMs) return null;
-
-    const speed = (m.d - primed.d) / (dt / 1000);
-    const curled = m.curl <= this.th.curl && primed.curl - m.curl >= this.th.curlDrop;
-    if (speed < this.th.minSpeed) return { type: 'near-miss', t, hand: label, reason: 'slow-release' };
-    if (!curled) return { type: 'near-miss', t, hand: label, reason: 'no-curl' };
-    if (t < this.cooldownUntil) return null;
-    this.cooldownUntil = t + (this.cfg.cooldownMs ?? 2000);
+    if (dt <= 0) return null;
+    const separation = m.d - p.d;
+    const retract = Math.max(p.curl - m.curl, p.tipToPalm - m.tipToPalm);
+    tr.peakSpeed = Math.max(tr.peakSpeed, Math.max(separation, retract) * 1000 / dt);
+    // Retraction itself can be the release signal: after a real snap, thumb and middle
+    // finger sometimes remain close in the 2D image even though they separated in depth.
+    const released = m.d >= this.th.open || (retract >= this.th.curlDrop * 1.6 && m.tipToPalm < 0.95);
+    const curled = retract >= this.th.curlDrop;
+    if (!released || !curled) { tr.reason = 'no-curl'; return null; }
+    if (tr.peakSpeed < this.th.minSpeed) { tr.reason = 'slow-release'; return null; }
+    tr.primed = null;
+    this.cooldownUntil = t + (this.cfg.cooldownMs ?? 1100);
+    this.reservationUntil = this.cooldownUntil;
     return { type: 'snap', t, hand: label };
   }
 }

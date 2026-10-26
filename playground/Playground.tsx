@@ -10,7 +10,7 @@ export function Playground() {
   const [deviceId, setDeviceId] = useState('');
   const [processed, setProcessed] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [mirror, setMirror] = useState(true);
+  const [mirror, setMirror] = useState(false);
   const [loopOn, setLoopOn] = useState(false);
   const [loopStats, setLoopStats] = useState<LoopbackStats | null>(null);
   const [counters, setCounters] = useState(engine.debugCounters());
@@ -30,6 +30,7 @@ export function Playground() {
 
   const start = async () => {
     setError(null);
+    void engine.audio.unlock().catch(() => {});
     try {
       const raw = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, ...(deviceId ? { deviceId: { exact: deviceId } } : {}) },

@@ -1,4 +1,4 @@
-import { createWorkerRuntime } from './worker-client';
+import { createSplitWorkerRuntime } from './worker-client';
 import type { VisionRuntime, VisionRuntimeOptions } from './types';
 
 type TTPolicy = { createScriptURL(url: string): unknown };
@@ -38,8 +38,7 @@ export async function createMeetWorkerRuntime(assetBase: string, opts: Omit<Visi
   ]);
   const url = URL.createObjectURL(new Blob([loader, '\n;\n', worker], { type: 'text/javascript' }));
   try {
-    const w = new Worker(trustedScriptUrl(url), { name: 'snapmeet-vision' });
-    return await createWorkerRuntime(w, opts);
+    return await createSplitWorkerRuntime(() => new Worker(trustedScriptUrl(url), { name: 'snapmeet-vision' }), opts);
   } finally {
     URL.revokeObjectURL(url);
   }

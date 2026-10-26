@@ -1,3 +1,4 @@
+import type { BodyAnchor, FaceAnchor } from '../vision/types';
 import type { EffectDefinition, EffectTemplate } from '../catalog/schema';
 import type { FullscreenQuad, RenderTarget } from '../engine/gl';
 import type { EffectPhase } from '../session/session';
@@ -15,6 +16,9 @@ export interface MaskInfo {
 }
 
 export interface FrameInputs {
+  face?: FaceAnchor | null;
+  body?: BodyAnchor | null;
+  hands?: Array<{ x: number; y: number; radius: number }>;
   /** Current camera frame (image space). */
   video: WebGLTexture;
   /** Latest smoothed person mask in the R channel, or null if unavailable. */

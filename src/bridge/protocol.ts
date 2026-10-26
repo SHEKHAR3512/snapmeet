@@ -77,6 +77,7 @@ export interface EngineStatus {
 }
 
 export interface Diagnostics {
+  audio?: { state: string; ready: number; outputs: number; transmitting: boolean; error: string | null; monitor: boolean };
   sourceWidth: number;
   sourceHeight: number;
   outputWidth: number;
@@ -106,8 +107,9 @@ export type EngineEvent =
   | { type: 'diagnostics'; diagnostics: Diagnostics }
   | { type: 'ack'; id: number; ok: boolean; error?: string }
   | { type: 'need-vision' }
+  | { type: 'need-audio'; requestId: number; effectId: string }
   | { type: 'notice'; level: 'info' | 'warn' | 'error'; code: string; message: string }
-  | { type: 'gesture'; gesture: 'snap' | 'palms' | 'near-miss'; detail?: string }
+  | { type: 'gesture'; gesture: 'snap' | 'palms' | 'pose' | 'near-miss'; detail?: string }
   | { type: 'background-preview'; bitmap: ImageBitmap; personVisible: boolean };
 
 /** Parses an untrusted command. Returns null (never throws) when invalid. */

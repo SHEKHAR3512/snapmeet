@@ -1,4 +1,5 @@
-import { LM, dist, inFrame, palmSize, type HandObservation, type HandsSample } from './landmarks';
+import { extendedFingers } from './pose-detector';
+import { LM, inFrame, palmSize, type HandObservation, type HandsSample } from './landmarks';
 
 /**
  * Experimental "two raised open palms" rule (used to trigger Absolute Cinema).
@@ -19,11 +20,7 @@ export function isOpenUprightPalm(hand: HandObservation, aspect: number): boolea
   if (hand.score < 0.6 || lm.length < 21 || !inFrame(lm, REQUIRED)) return false;
   const palm = palmSize(lm, aspect);
   if (palm < 0.04) return false;
-  const wrist = lm[LM.WRIST]!;
-  return FINGER_TIPS.every((i) => {
-    const tip = lm[i]!;
-    return dist(tip, wrist, aspect) / palm > 1.5 && tip.y < wrist.y;
-  });
+  return extendedFingers(hand, aspect)?.every(Boolean) ?? false;
 }
 
 export class PalmsDetector {
@@ -45,14 +42,14 @@ export class PalmsDetector {
   push(sample: HandsSample): boolean {
     const open = sample.hands.filter((h) => isOpenUprightPalm(h, this.cfg.aspect));
     const apart =
-      open.length >= 2 && Math.abs(open[0]!.landmarks[LM.WRIST]!.x - open[1]!.landmarks[LM.WRIST]!.x) > 0.22;
+      open.length >= 2 && Math.abs(open[0]!.landmarks[LM.WRIST]!.x - open[1]!.landmarks[LM.WRIST]!.x) > 0.12;
     if (!apart) {
       this.reset();
       return false;
     }
     this.heldSince ??= sample.t;
     if (this.fired || sample.t < this.cooldownUntil) return false;
-    if (sample.t - this.heldSince >= (this.cfg.holdMs ?? 500)) {
+    if (sample.t - this.heldSince >= (this.cfg.holdMs ?? 280)) {
       this.fired = true;
       this.cooldownUntil = sample.t + (this.cfg.cooldownMs ?? 3000);
       return true;

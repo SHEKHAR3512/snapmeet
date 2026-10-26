@@ -1,0 +1,92 @@
+[
+  {
+    "effectId": "dust-away",
+    "description": "Thanos snap",
+    "path": "public/audio/dust-away.mp3",
+    "sha256": "462bc62b1a0e0f457794157606954436114a18ef120d1279eccfd0423224c986",
+    "source": "https://www.myinstants.com/media/sounds/thanos_5TP94G5.mp3",
+    "retrieved": "2026-10-26",
+    "license": "Third-party meme clip; underlying rights belong to original owners; no redistribution license verified"
+  },
+  {
+    "effectId": "absolute-cinema",
+    "description": "Absolute Cinema soundboard variant",
+    "path": "public/audio/absolute-cinema.mp3",
+    "sha256": "3c86616627c96099ac924fafed319986a15793ec8e656f07942dab1cb1a48ad4",
+    "source": "https://www.myinstants.com/media/sounds/absolute-cinema.mp3",
+    "retrieved": "2026-10-26",
+    "license": "Third-party meme clip; underlying rights belong to original owners; no redistribution license verified"
+  },
+  {
+    "effectId": "aura-9999",
+    "description": "Aura phonk variant",
+    "path": "public/audio/aura-9999.mp3",
+    "sha256": "977688222a28797306c6c176ff0b7030130818f128ed66d90fe046ce9bbc0854",
+    "source": "https://www.myinstants.com/media/sounds/aura-phonk.mp3",
+    "retrieved": "2026-10-26",
+    "license": "Third-party meme clip; underlying rights belong to original owners; no redistribution license verified"
+  },
+  {
+    "effectId": "emotional-damage",
+    "description": "Emotional Damage voice clip",
+    "path": "public/audio/emotional-damage.mp3",
+    "sha256": "e1668d57edc60539f3e218fbc51c5c97fbe5cb56d63b7b2c85608afbdecbf4d8",
+    "source": "https://www.myinstants.com/media/sounds/emotional-damage-meme.mp3",
+    "retrieved": "2026-10-26",
+    "license": "Third-party meme clip; underlying rights belong to original owners; no redistribution license verified"
+  },
+  {
+    "effectId": "mission-passed",
+    "description": "GTA San Andreas mission complete",
+    "path": "public/audio/mission-passed.mp3",
+    "sha256": "8c830164841c12af85be26108cbfb49450dbbbd1071e04fc2d06cfef9e3c6578",
+    "source": "https://www.myinstants.com/media/sounds/gta-san-andreas-mission-complete-sound-hq.mp3",
+    "retrieved": "2026-10-26",
+    "license": "Third-party meme clip; underlying rights belong to original owners; no redistribution license verified"
+  },
+  {
+    "effectId": "serial-drama",
+    "description": "Indian serial drama sting",
+    "path": "public/audio/serial-drama.mp3",
+    "sha256": "32da9dc9e1351dbe5a2e6e2346f7d02437f352b195f6c84cb0b041323a6e374d",
+    "source": "https://www.myinstants.com/media/sounds/indian-serial-drama.mp3",
+    "retrieved": "2026-10-26",
+    "license": "Third-party meme clip; underlying rights belong to original owners; no redistribution license verified"
+  },
+  {
+    "effectId": "this-is-fine",
+    "description": "This Is Fine soundboard variant",
+    "path": "public/audio/this-is-fine.mp3",
+    "sha256": "2bb09c63751b9e17f678004c409fc48f41b255ace497e0e40a1e545520c9e8d9",
+    "source": "https://www.myinstants.com/media/sounds/fine.mp3",
+    "retrieved": "2026-10-26",
+    "license": "Third-party meme clip; underlying rights belong to original owners; no redistribution license verified"
+  },
+  {
+    "effectId": "aayein",
+    "description": "Aayein reaction",
+    "path": "public/audio/aayein.mp3",
+    "sha256": "2af3af0c3622b12a163da18b4337a5e1a4437fa625d851bb376a1c57da52f174",
+    "source": "https://raw.githubusercontent.com/sodiqjon-maxammadjonov/soundboard/master/assets/sounds/aayein-meme.mp3",
+    "retrieved": "2026-10-26",
+    "license": "Third-party meme clip; underlying rights belong to original owners; no redistribution license verified"
+  },
+  {
+    "effectId": "main-character",
+    "description": "Golden Wind theme meme variant",
+    "path": "public/audio/main-character.mp3",
+    "sha256": "e03b27d5f4a59e95ff2234d399b96bc2843aff296668bac3f8548d90296f278d",
+    "source": "https://raw.githubusercontent.com/sodiqjon-maxammadjonov/soundboard/master/assets/sounds/jojos-golden-wind_kL2WElB.mp3",
+    "retrieved": "2026-10-26",
+    "license": "Third-party meme clip; underlying rights belong to original owners; no redistribution license verified"
+  },
+  {
+    "effectId": "plot-twist",
+    "description": "Dun dun dun reveal sting",
+    "path": "public/audio/plot-twist.mp3",
+    "sha256": "6cc67ae7ef0b4008bc14b62a4fc4fe016858f972a4c8f5e4de0fda15f55d5474",
+    "source": "https://raw.githubusercontent.com/sodiqjon-maxammadjonov/soundboard/master/assets/sounds/dun-dun-dun-sound-effect-brass_8nFBccR.mp3",
+    "retrieved": "2026-10-26",
+    "license": "Third-party meme clip; underlying rights belong to original owners; no redistribution license verified"
+  }
+]

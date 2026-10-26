@@ -40,7 +40,7 @@ export class DramaticZoomEffect extends ShaderEffect<'dramatic-zoom'> {
   }
 
   protected override onStart(run: EffectStart): void {
-    this.focus = run.inputs.maskInfo?.head ?? [0.5, 0.4];
+    this.focus = run.inputs.face?.eyes ?? run.inputs.maskInfo?.head ?? [0.5, 0.4];
   }
 
   render(f: EffectFrame): void {
@@ -74,6 +74,7 @@ export class DramaticZoomEffect extends ShaderEffect<'dramatic-zoom'> {
     const out = easeInOutCubic(ramp(t, outStart, D));
     zoom = zoom + (1 - zoom) * out;
 
+    if (f.inputs.face) this.focus = f.inputs.face.eyes;
     const [fx, fy] = this.focus;
     const half = 0.5 / zoom;
     const cx = Math.min(1 - half, Math.max(half, fx));

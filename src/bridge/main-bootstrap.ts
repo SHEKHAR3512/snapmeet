@@ -1,3 +1,5 @@
+import { installMeetAudioRouting } from './meet-audio';
+import { installSelfViewCorrection } from './self-view';
 /**
  * MAIN-world entry, injected at document_start on https://meet.google.com/*.
  * Installs the camera wrapper before Meet's scripts run and waits for the isolated
@@ -28,8 +30,17 @@ function main(): void {
     else if (ev.type === 'background-preview') ev.bitmap.close();
   };
 
-  const engine = new Engine({ emit, loadVision: () => loadVisionInMeet() });
+  let audioRequestId = 0;
+  const pendingAudio = new Map<number, { resolve(bytes: ArrayBuffer): void; reject(error: Error): void }>();
+  const engine = new Engine({ emit, loadVision: () => loadVisionInMeet(), loadAudio: effectId => new Promise((resolve, reject) => {
+    const requestId = ++audioRequestId;
+    const timer = setTimeout(() => { pendingAudio.delete(requestId); reject(new Error(`Sound download timed out: ${effectId}`)); }, 10_000);
+    pendingAudio.set(requestId, { resolve: bytes => { clearTimeout(timer); resolve(bytes); }, reject: error => { clearTimeout(timer); reject(error); } });
+    emit({ type: 'need-audio', effectId, requestId });
+  }) });
   installGetUserMediaWrapper(engine);
+  installMeetAudioRouting(engine);
+  installSelfViewCorrection(engine);
   // Read-only counters for automated tests. Contains no frames, devices or meeting data.
   Object.defineProperty(g, DEBUG_KEY, { value: Object.freeze({ counters: () => engine.debugCounters() }) });
 
@@ -48,6 +59,14 @@ function main(): void {
   }
 
   function onPortMessage(e: MessageEvent): void {
+    if (e.data?.type === 'audio-bytes') {
+      const pending = pendingAudio.get(e.data.requestId);
+      if (!pending) return;
+      pendingAudio.delete(e.data.requestId);
+      if (e.data.bytes instanceof ArrayBuffer && e.data.bytes.byteLength <= 2_000_000) pending.resolve(e.data.bytes);
+      else pending.reject(new Error('Extension could not load the meme sound. Reload the extension and Meet tab.'));
+      return;
+    }
     const data = e.data as { type?: unknown; id?: unknown; bitmap?: unknown } | null;
     const id = typeof data?.id === 'number' ? data.id : -1;
     if (data?.type === CUSTOM_BACKGROUND) {
@@ -73,6 +92,8 @@ function main(): void {
       wasmBinaryUrl: `${base}wasm/vision_wasm_internal.wasm`,
       segmenterModelUrl: `${base}models/selfie_segmenter_landscape.tflite`,
       handModelUrl: `${base}models/hand_landmarker.task`,
+      faceModelUrl: `${base}models/face_landmarker.task`,
+      poseModelUrl: `${base}models/pose_landmarker_lite.task`,
     };
     try {
       return await createMeetWorkerRuntime(base, opts);

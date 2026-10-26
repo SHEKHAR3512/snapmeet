@@ -9,7 +9,9 @@ processes the frames **inside your browser tab** (WebGL and a local MediaPipe mo
 hands the processed video to Meet, which sends it to the call like any camera.
 
 * Camera frames are **not recorded, uploaded or stored** by SnapMeet.
-* Your microphone audio is passed to Meet unchanged; SnapMeet does not read it.
+* Microphone audio passes through a local Web Audio mixer so bundled meme clips can be
+  added to the outgoing call. It is not recorded, analyzed, stored, or sent anywhere by
+  SnapMeet. Meet receives the mixed track; its mute control mutes the whole track.
 * Screen sharing is not touched.
 * An empty-room capture or custom background image is held **in memory for that Meet tab
   only** and discarded when the tab closes. It is never written to disk by SnapMeet.
@@ -25,9 +27,8 @@ stored in that page's local storage only.
 
 ## Network activity
 
-* All code, the WASM runtime and the models are bundled. The automated test suite records
-  every request made by the Meet page context with SnapMeet active and finds only the Meet
-  origin and the extension's own packaged files.
+* All code, the WASM runtime, models, and meme sounds are bundled. No external sound or
+  model downloads occur during a call. The latest face/audio update has not been tested.
 * The only network request SnapMeet itself can make is the **optional** remote collection
   refresh, which you must configure (and grant permission for that site). It downloads a
   JSON file at most once a day, without cookies, and sends no camera, audio, meeting or

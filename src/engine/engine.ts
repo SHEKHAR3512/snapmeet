@@ -1,16 +1,18 @@
+import { MemeAudio } from './audio';
 import { adoptOutputTrack, adoptStream, endConsumers } from '../bridge/track-adapter';
 import type { Command, Diagnostics, EngineEvent, EngineStatus, VisionState } from '../bridge/protocol';
 import { BUILTIN_EFFECTS } from '../catalog/builtin';
 import { parseDefinitions, type EffectDefinition } from '../catalog/schema';
 import { MASK_ENHANCED } from '../effects/registry';
 import { SnapCalibration } from '../gestures/calibration';
+import { PoseDetector } from '../gestures/pose-detector';
 import { PalmsDetector } from '../gestures/palms-detector';
 import { SnapDetector, type SnapEvent } from '../gestures/snap-detector';
 import { SessionMachine, type SessionSnapshot } from '../session/session';
 import { CUSTOM_IMAGE_LIMITS } from '../shared/backgrounds';
 import { DEFAULT_SETTINGS, type Settings } from '../shared/settings';
 import { MaskProcessor, personFraction } from '../vision/mask';
-import type { VisionRuntime } from '../vision/types';
+import type { BodyAnchor, FaceAnchor, VisionRuntime } from '../vision/types';
 import { BackgroundStore, THUMB_H, THUMB_W, backgroundDrift, lumaThumb } from './background';
 import { VideoPipeline, type FramePlan, type PipelineHost } from './pipeline';
 import { AdaptiveQuality, QUALITY_PRESETS } from './quality';
@@ -18,6 +20,7 @@ import { MASK_FRESH_MS } from './renderer';
 import { RateMeter, Samples } from './stats';
 
 export interface EngineDeps {
+  loadAudio?(id: string): Promise<ArrayBuffer>;
   loadVision(): Promise<VisionRuntime>;
   emit(ev: EngineEvent, transfer?: Transferable[]): void;
   /** Test hook: use <video>/captureStream instead of the breakout-box APIs. */
@@ -49,6 +52,8 @@ const NOTICE_TEXT: Record<string, string> = {
  * playground (extension page), so both exercise the same code path.
  */
 export class Engine implements PipelineHost {
+  readonly audio = new MemeAudio(message => { this.pushError(`Audio: ${message}`); this.notice('warn', 'sound', message); }, id => this.deps.loadAudio ? this.deps.loadAudio(id) : Promise.reject(new Error(`Could not load sound ${id}`)));
+  private assetBase = new URL('.', location.href).href;
   settings: Settings = { ...DEFAULT_SETTINGS };
   private extensionVersion = '0.0.0';
   private defs = new Map<string, EffectDefinition>(BUILTIN_EFFECTS.map((d) => [d.id, d]));
@@ -65,15 +70,22 @@ export class Engine implements PipelineHost {
   private visionPromise: Promise<void> | null = null;
   private visionFailedAt = 0;
   private handsError: string | null = null;
+  private handsLoading = false;
+  private handsRetryAt = 0;
 
+  private body: { anchor: BodyAnchor; at: number } | null = null;
+  private trackedHands: { at: number; holes: Array<{ x: number; y: number; radius: number }> } | null = null;
+  private face: { anchor: FaceAnchor; at: number } | null = null;
   private mask = new MaskProcessor();
   private snap = new SnapDetector({ sensitivity: DEFAULT_SETTINGS.snapSensitivity, aspect: 16 / 9 });
+  private poses = new PoseDetector();
   private palms = new PalmsDetector({ aspect: 16 / 9 });
   private calibration = new SnapCalibration(DEFAULT_SETTINGS.snapSensitivity);
   private bg = new BackgroundStore();
   private quality = new AdaptiveQuality(DEFAULT_SETTINGS.quality);
   private segBusy = false;
   private handBusy = false;
+  private inferenceEpoch = 0;
   private thumbCanvas = new OffscreenCanvas(THUMB_W, THUMB_H);
   private lastSegAt = -Infinity;
   private lastHandAt = -Infinity;
@@ -93,7 +105,10 @@ export class Engine implements PipelineHost {
   private lastSnapFeedbackKey = '';
 
   constructor(private deps: EngineDeps) {
-    this.session.subscribe(() => this.markDirty());
+    this.session.subscribe(s => {
+      if (!s.effect || s.phase !== 'LIVE') this.audio.stop();
+      this.markDirty();
+    });
   }
 
   // ───────────────────────── configuration ─────────────────────────
@@ -101,6 +116,10 @@ export class Engine implements PipelineHost {
   configure(settings: Settings, rawDefinitions: unknown[], extensionVersion: string): void {
     const prev = this.settings;
     this.settings = settings;
+    if (prev.enabled !== settings.enabled || prev.poseEnabled !== settings.poseEnabled || prev.snapEnabled !== settings.snapEnabled || prev.palmsEnabled !== settings.palmsEnabled) {
+      this.inferenceEpoch++; this.snap.reset(); this.palms.reset(); this.poses.reset();
+    }
+    this.audio.configure(this.assetBase, settings.enabled && settings.soundEnabled, settings.soundVolume, settings.soundMonitor);
     this.extensionVersion = extensionVersion;
     const defs = parseDefinitions(rawDefinitions, extensionVersion);
     if (defs.length) this.defs = new Map(defs.map((d) => [d.id, d]));
@@ -151,6 +170,8 @@ export class Engine implements PipelineHost {
       },
     });
     this.pipelines.add(p);
+    this.inferenceEpoch++;
+    this.face = null; this.body = null; this.trackedHands = null;
     this.primary = p;
     this.session.cameraStarting();
     p.source.addEventListener('ended', () => p.stop('source-ended'));
@@ -172,6 +193,8 @@ export class Engine implements PipelineHost {
     if (p.allConsumersDisabled) return { kind: 'paused' };
     const q = this.quality.current;
     if (p === this.primary) {
+      this.snap.configure({ aspect: width / Math.max(1, height) });
+      this.palms.configure({ aspect: width / Math.max(1, height) });
       this.session.tick(now);
       if (this.settings.enabled) {
         this.runInference(frame, now);
@@ -189,6 +212,9 @@ export class Engine implements PipelineHost {
       lockSize: s.effectPhase !== 'IDLE',
       state: {
         now,
+        body: this.body && now - this.body.at < 450 ? this.body.anchor : null,
+        hands: this.trackedHands && now - this.trackedHands.at < 200 ? this.trackedHands.holes : [],
+        face: this.face && now - this.face.at < 350 ? this.face.anchor : null,
         session: s,
         mask: m && now - m.at < 1500 ? m : null,
         background: this.settings.enabled
@@ -240,10 +266,12 @@ export class Engine implements PipelineHost {
     this.palms.configure({ aspect });
     if (p === this.primary) this.session.cameraLive(performance.now());
     this.maybeLoadVision();
+    this.audio.preload();
     this.markDirty();
   }
 
   onStopped(p: VideoPipeline, reason: string): void {
+    this.inferenceEpoch++;
     this.pipelines.delete(p);
     if (reason === 'source-ended') endConsumers(p);
     if (this.primary === p) {
@@ -251,9 +279,11 @@ export class Engine implements PipelineHost {
     }
     if (!this.primary) {
       this.session.cameraStopped(performance.now());
+      this.face = null; this.body = null; this.trackedHands = null;
       this.mask.reset();
       this.snap.reset();
       this.palms.reset();
+      this.poses.reset();
       this.calibration.stop();
       this.pendingTrigger = null;
       this.pendingCapture = false;
@@ -267,6 +297,7 @@ export class Engine implements PipelineHost {
     const now = performance.now();
     switch (cmd.type) {
       case 'config':
+        this.assetBase = cmd.assetBase;
         this.configure(cmd.settings, cmd.definitions, cmd.extensionVersion);
         return { ok: true };
       case 'trigger':
@@ -274,6 +305,8 @@ export class Engine implements PipelineHost {
       case 'reappear':
         return { ok: this.session.reappear(now) };
       case 'reset':
+        this.inferenceEpoch++;
+        this.poses.reset(); this.palms.reset();
         this.pendingTrigger = null;
         this.snap.reset();
         this.session.reset(now);
@@ -288,6 +321,7 @@ export class Engine implements PipelineHost {
         this.markDirty();
         return { ok: true };
       case 'calibration':
+        this.inferenceEpoch++; this.poses.reset(); this.palms.reset();
         if (cmd.action === 'start') {
           if (!this.session.startCalibration()) return { ok: false, error: 'Calibration needs a live camera and no active effect.' };
           this.calibration.start(this.settings.snapSensitivity);
@@ -322,14 +356,16 @@ export class Engine implements PipelineHost {
   }
 
   trigger(effectId: string, source: 'manual' | 'snap' | 'palms'): { ok: boolean; error?: string } {
-    const def = this.defs.get(effectId);
+    const original = this.defs.get(effectId);
+    const def = original ? { ...original, durationMs: this.audio.duration(effectId, original.durationMs) } : undefined;
     if (!def) return { ok: false, error: `Unknown effect ${effectId}` };
     const now = performance.now();
     const found: { missing: string | null } = { missing: null };
     const r = this.session.trigger(def, now, () => (found.missing = this.missingRequirement(def, now)));
     if (r.ok) {
+      void this.audio.play(def.id, def.durationMs);
       this.pendingTrigger = null;
-      if (def.template === 'dust-away') this.snap.reset();
+
       return { ok: true };
     }
     const code: string = r.reason === 'missing-requirement' ? (found.missing ?? 'camera') : r.reason;
@@ -386,7 +422,7 @@ export class Engine implements PipelineHost {
       const d = this.defs.get(id);
       return !!d && (d.requires.includes('person-mask') || MASK_ENHANCED.has(d.template));
     };
-    return s.snapEnabled || s.palmsEnabled || needsMask(s.selectedEffectId) || s.backgroundMode === 'captured';
+    return s.poseEnabled || s.snapEnabled || s.palmsEnabled || needsMask(s.selectedEffectId) || this.defs.has(s.selectedEffectId) || s.backgroundMode === 'captured';
   }
 
   private maybeLoadVision(force = false): void {
@@ -418,11 +454,13 @@ export class Engine implements PipelineHost {
 
   private maybeLoadHands(): void {
     const v = this.vision;
-    if (!v || v.info.handsLoaded) return;
-    if (!(this.settings.snapEnabled || this.settings.palmsEnabled || this.calibration.snapshot.active)) return;
+    if (!v || v.info.handsLoaded || this.handsLoading || performance.now() < this.handsRetryAt) return;
+    if (!(this.settings.poseEnabled || this.settings.snapEnabled || this.settings.palmsEnabled || this.calibration.snapshot.active)) return;
+    this.handsLoading = true;
     v.ensureHands().then(
-      () => this.markDirty(),
+      () => { this.handsLoading = false; this.handsError = null; this.markDirty(); },
       (e) => {
+        this.handsLoading = false; this.handsRetryAt = performance.now() + 3000;
         this.handsError = String((e as Error)?.message ?? e);
         this.pushError(`Hand tracking: ${this.handsError}`);
         this.markDirty();
@@ -441,6 +479,7 @@ export class Engine implements PipelineHost {
 
   private segmentationNeeded(s: SessionSnapshot): boolean {
     if (this.pendingCapture || this.pendingTrigger) return true;
+    if (s.phase === 'LIVE' && (s.effectPhase === 'IDLE' || s.effectPhase === 'PLAYING')) return true;
     if (s.phase === 'CALIBRATING') return false;
     switch (s.effectPhase) {
       case 'DISINTEGRATING':
@@ -467,7 +506,7 @@ export class Engine implements PipelineHost {
   private handsNeeded(s: SessionSnapshot): boolean {
     if (!this.vision?.info.handsLoaded) return false;
     if (s.phase === 'CALIBRATING') return true;
-    return (this.settings.snapEnabled || this.settings.palmsEnabled) && s.phase === 'LIVE' && s.effectPhase === 'IDLE';
+    return (this.settings.poseEnabled || this.settings.snapEnabled || this.settings.palmsEnabled) && s.phase === 'LIVE';
   }
 
   /**
@@ -476,41 +515,51 @@ export class Engine implements PipelineHost {
    * and are used by the following frames.
    */
   private runInference(frame: FrameLike, now: number): void {
+    if (this.visionState === 'failed') this.maybeLoadVision();
+    this.maybeLoadHands();
     const v = this.vision;
     if (!v || this.visionState !== 'ready') return;
+    const epoch = this.inferenceEpoch;
     const s = this.session.snapshot;
     const preset = QUALITY_PRESETS[this.quality.current];
-    const segInterval = s.effectPhase === 'VANISHED' ? 200 : preset.segIntervalMs;
-    if (!this.segBusy && this.segmentationNeeded(s) && now - this.lastSegAt >= segInterval) {
-      this.lastSegAt = now;
-      this.segBusy = true;
-      const t0 = performance.now();
-      v.segment(toVideoFrame(frame, now), now)
-        .then((out) => {
-          if (this.vision !== v) return;
-          this.segMs.push(performance.now() - t0);
-          this.segRate.tick(performance.now());
-          if (out) {
-            this.mask.update(out.confidence, out.width, out.height, now);
-            this.lastPersonFraction = personFraction(out.confidence);
-          }
-        })
-        .catch((e) => this.onInferenceError(v, e))
-        .finally(() => (this.segBusy = false));
-    }
-    if (!this.handBusy && this.handsNeeded(s) && now - this.lastHandAt >= preset.handIntervalMs) {
+    const segInterval = s.effectPhase === 'VANISHED' ? 200 : Math.max(100, preset.segIntervalMs);
+    if (!this.handBusy && this.handsNeeded(s) && now - this.lastHandAt >= 30) {
       this.lastHandAt = now;
       this.handBusy = true;
       const t0 = performance.now();
       v.detectHands(toVideoFrame(frame, now), now)
         .then((sample) => {
-          if (this.vision !== v) return;
+          if (this.vision !== v || epoch !== this.inferenceEpoch || !this.settings.enabled) return;
           this.handMs.push(performance.now() - t0);
           this.handRate.tick(performance.now());
           if (sample) this.onHands(sample);
         })
         .catch((e) => this.onInferenceError(v, e))
         .finally(() => (this.handBusy = false));
+    }
+    if (!this.segBusy && this.segmentationNeeded(s) && now - this.lastSegAt >= segInterval) {
+      this.lastSegAt = now;
+      this.segBusy = true;
+      const t0 = performance.now();
+      v.segment(toVideoFrame(frame, now), now)
+        .then((out) => {
+          if (this.vision !== v || epoch !== this.inferenceEpoch || !this.settings.enabled) return;
+          this.segMs.push(performance.now() - t0);
+          this.segRate.tick(performance.now());
+          if (out) {
+            this.body = out.body ? { anchor: out.body, at: now } : null;
+            if (out.face && this.face && now - this.face.at < 250) {
+              const previous = this.face.anchor, next = out.face;
+              const blend = (a: number, b: number) => a + (b - a) * 0.65;
+              const pair = (a: [number, number], b: [number, number]): [number, number] => [blend(a[0], b[0]), blend(a[1], b[1])];
+              this.face = { at: now, anchor: { eyes: pair(previous.eyes, next.eyes), chin: pair(previous.chin, next.chin), forehead: pair(previous.forehead, next.forehead), width: blend(previous.width, next.width), height: blend(previous.height, next.height), rotation: blend(previous.rotation, next.rotation) } };
+            } else this.face = out.face ? { anchor: out.face, at: now } : null;
+            this.mask.update(out.confidence, out.width, out.height, now);
+            this.lastPersonFraction = personFraction(out.confidence);
+          }
+        })
+        .catch((e) => this.onInferenceError(v, e))
+        .finally(() => (this.segBusy = false));
     }
   }
 
@@ -527,11 +576,35 @@ export class Engine implements PipelineHost {
   }
 
   private onHands(sample: { t: number; hands: Parameters<SnapDetector['push']>[0]['hands'] }): void {
-    for (const ev of this.snap.push(sample)) this.onSnapEvent(ev);
-    if (this.settings.palmsEnabled && this.session.snapshot.phase === 'LIVE' && this.palms.push(sample)) {
+    const aspectRatio = this.primary ? this.primary.sourceWidth / this.primary.sourceHeight : 16 / 9;
+    this.trackedHands = { at: sample.t, holes: sample.hands.filter(h => h.landmarks.length >= 21).map(h => {
+      const wrist = h.landmarks[0]!, middle = h.landmarks[9]!;
+      return { x: middle.x, y: middle.y,
+        radius: Math.hypot((middle.x - wrist.x) * aspectRatio, middle.y - wrist.y) * 1.25 };
+    }) };
+    if (this.calibration.snapshot.active) {
+      for (const ev of this.snap.push(sample)) this.onSnapEvent(ev);
+      return;
+    }
+    for (const ev of this.snap.push(sample)) if (this.settings.snapEnabled && this.session.snapshot.effectPhase === 'IDLE') this.onSnapEvent(ev);
+    if (this.settings.poseEnabled && this.settings.snapEnabled && this.snap.reservesPose(sample.t)) {
+      this.poses.reset();
+      return;
+    }
+    if (this.settings.poseEnabled) {
+      const aspect = this.primary ? this.primary.sourceWidth / this.primary.sourceHeight : 16 / 9;
+      const id = this.poses.push(sample, aspect);
+      if (id === 'absolute-cinema' && this.session.snapshot.effectPhase === 'VANISHED') this.session.reappear(performance.now());
+      if (id && this.session.snapshot.effectPhase === 'IDLE' && (id !== 'absolute-cinema' || this.settings.palmsEnabled)) {
+        this.deps.emit({ type: 'gesture', gesture: 'pose', detail: this.defs.get(id)?.title ?? id });
+        this.trigger(id, 'palms');
+      }
+    }
+    if (!this.settings.poseEnabled && this.settings.palmsEnabled && this.session.snapshot.phase === 'LIVE' && this.palms.push(sample)) {
       const cinema = [...this.defs.values()].find((d) => d.template === 'cinema');
       this.deps.emit({ type: 'gesture', gesture: 'palms' });
-      if (cinema) this.trigger(cinema.id, 'palms');
+      if (this.session.snapshot.effectPhase === 'VANISHED') this.session.reappear(performance.now());
+      else if (cinema && this.session.snapshot.effectPhase === 'IDLE') this.trigger(cinema.id, 'palms');
     }
   }
 
@@ -647,6 +720,7 @@ export class Engine implements PipelineHost {
       visionDelegate: this.vision ? `${this.vision.info.delegate}, ${this.vision.mode}` : null,
       segmenterLabels: this.vision ? [...this.vision.info.segmenterLabels, `person mask: ${this.vision.info.personMaskRule}`] : [],
       personCoverage: this.mask.snapshot ? Math.round(this.mask.snapshot.info.coverage * 1000) / 1000 : null,
+      audio: this.audio.status,
       errors: [...this.errors],
     };
   }

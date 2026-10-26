@@ -7,7 +7,7 @@ import type { Settings } from '../src/shared/settings';
 import { UiStore, type ControllerApi } from '../src/ui/state';
 import { createMainThreadRuntime } from '../src/vision/main-thread';
 import type { VisionRuntime } from '../src/vision/types';
-import { createWorkerRuntime } from '../src/vision/worker-client';
+import { createSplitWorkerRuntime } from '../src/vision/worker-client';
 
 /**
  * Playground wiring: the same Engine as in Meet, driven directly (no MAIN-world bridge).
@@ -31,12 +31,14 @@ const visionOpts = {
   wasmBinaryUrl: `${base}wasm/vision_wasm_internal.wasm`,
   segmenterModelUrl: `${base}models/selfie_segmenter_landscape.tflite`,
   handModelUrl: `${base}models/hand_landmarker.task`,
+      faceModelUrl: `${base}models/face_landmarker.task`,
+      poseModelUrl: `${base}models/pose_landmarker_lite.task`,
 };
 
 /** Worker first (the built extension ships vision-worker.js); main thread otherwise (e.g. Vite dev). */
 async function loadVision(): Promise<VisionRuntime> {
   try {
-    return await createWorkerRuntime(new Worker(`${base}vision-worker.js`, { name: 'snapmeet-vision' }), visionOpts);
+    return await createSplitWorkerRuntime(() => new Worker(`${base}vision-worker.js`, { name: 'snapmeet-vision' }), visionOpts);
   } catch (e) {
     console.info('[SnapMeet] vision worker unavailable, using main thread:', (e as Error).message);
     return createMainThreadRuntime(visionOpts);

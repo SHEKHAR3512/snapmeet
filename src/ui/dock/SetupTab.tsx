@@ -10,6 +10,14 @@ export function SetupTab({ api, ui }: { api: ControllerApi; ui: UiState }) {
   const set = (patch: Parameters<ControllerApi['updateSettings']>[0]) => void api.updateSettings(patch);
   return (
     <div>
+      <section className="sm-section">
+        <h3>Meme sounds</h3>
+        <Toggle id="sm-sound" label="Play meme sounds into the call" checked={settings.soundEnabled} onChange={(v) => set({ soundEnabled: v })} />
+        <Toggle id="sm-monitor" label="Hear meme sounds on this device" checked={settings.soundMonitor} onChange={(v) => set({ soundMonitor: v })} />
+        <label htmlFor="sm-volume">Sound volume</label>
+        <input id="sm-volume" type="range" min="0" max="1" step="0.05" value={settings.soundVolume} onChange={e => set({ soundVolume: Number(e.target.value) })} />
+        <p className="sm-hint">Local playback works even without a microphone. Call audio follows Meet's microphone mute. Use headphones, or switch off local playback to avoid speaker pickup.</p>
+      </section>
       <section className="sm-section" aria-labelledby="sm-bg-h">
         <h3 id="sm-bg-h">Disappearance background</h3>
         <div className="sm-seg" role="group" aria-label="Background mode">

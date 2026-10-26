@@ -1,3 +1,4 @@
+import { MEME_CUES } from '../catalog/meme-cues';
 /**
  * Isolated-world content script (document_start on https://meet.google.com/*).
  * Owns extension storage, validated control messages to the MAIN-world engine, the
@@ -55,6 +56,15 @@ function onEngineMessage(e: MessageEvent<EngineEvent>): void {
   if (ev.type === 'ack') {
     pending.get(ev.id)?.({ ok: ev.ok, error: ev.error });
     pending.delete(ev.id);
+    return;
+  }
+  if (ev.type === 'need-audio') {
+    if (!Object.hasOwn(MEME_CUES, ev.effectId)) return;
+    void fetch(chrome.runtime.getURL(`audio/${ev.effectId}.mp3`)).then(async response => {
+      if (!response.ok) throw new Error('Sound file unavailable');
+      const bytes = await response.arrayBuffer();
+      port?.postMessage({ type: 'audio-bytes', requestId: ev.requestId, bytes }, [bytes]);
+    }).catch(() => port?.postMessage({ type: 'audio-bytes', requestId: ev.requestId, error: true }));
     return;
   }
   if (ev.type === 'need-vision') {

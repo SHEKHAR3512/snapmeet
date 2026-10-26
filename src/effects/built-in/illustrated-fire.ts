@@ -1,3 +1,4 @@
+import { drawAccessory } from '../accessories';
 import { fragment } from '../../engine/gl';
 import { ShaderEffect } from '../base';
 import { easeOutBack, envelope, ramp } from '../easing';
@@ -24,7 +25,7 @@ vec3 firePalette(float x) {
 float flame(float along, float depth, float height, float t, float seed) {
   float n = fbm(vec2(along * 7.0 + seed, depth * 4.0 - t * 2.1));
   float tongues = 0.65 + 0.35 * sin(along * 23.0 + t * 1.3 + seed) * fbm(vec2(along * 3.0, t * 0.4));
-  float h = height * tongues;
+  float h = max(0.0001, height * tongues);
   return clamp((h - depth) / h + (n - 0.5) * 0.9, 0.0, 1.0);
 }
 
@@ -56,10 +57,11 @@ export class IllustratedFireEffect extends ShaderEffect<'illustrated-fire'> {
   }
 
   protected override onStart(run: EffectStart): void {
-    this.head = run.inputs.maskInfo?.head ?? [0.5, 0.35];
+    this.head = run.inputs.face?.eyes ?? run.inputs.maskInfo?.head ?? [0.5, 0.35];
   }
 
   render(f: EffectFrame): void {
+    if (f.inputs.face) this.head = f.inputs.face.eyes;
     const p = this.def.parameters;
     const D = this.durationOf(f);
     const t = f.elapsed;
@@ -73,9 +75,10 @@ export class IllustratedFireEffect extends ShaderEffect<'illustrated-fire'> {
       .f('u_aspect', aspect)
       .tex('u_video', 0, f.inputs.video);
     this.ctx.quad.draw();
+    drawAccessory(this.sprites, f, 'hat', amount);
 
-    const pop = this.reducedMotion ? ramp(t, 900, 1200) : easeOutBack(ramp(t, 900, 1180));
-    const alpha = Math.min(ramp(t, 900, 1000), 1 - ramp(t, D - 600, D - 200));
+    const pop = this.reducedMotion ? ramp(t, 350, 650) : easeOutBack(ramp(t, 350, 650));
+    const alpha = Math.min(ramp(t, 350, 500), 1 - ramp(t, D - 600, D - 200));
     if (alpha > 0 && pop > 0) {
       const bubble = this.sprites.text({
         text: p.caption ?? 'This is fine.',

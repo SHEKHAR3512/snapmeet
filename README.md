@@ -26,13 +26,13 @@ Everyone else in the call sees them, and they don't need to install anything.
 | | Effect | What the other participants see |
 | --- | --- | --- |
 | 🫥 | **Dust Away** | Your body disintegrates into drifting dust; your empty room (or a virtual background) stays. You keep talking the whole time. |
-| 🎬 | **Absolute Cinema** | Black-and-white grade, letterbox bars, film grain and a title card. |
+| 🎬 | **Absolute Cinema** | Face-tracked suit, black-and-white grade, film grain and title. |
 | 💜 | **Aura +9999** | A glowing outline around you and a score that counts up. |
 | 📺 | **Indian Serial Drama** | Three dramatic zoom punches toward your face with tinted shock frames. |
 | ❓ | **Aayein?** | Freeze frame with bouncing question marks. |
 | 💥 | **Emotional Damage** | A quick shake, punch-in and impact caption. |
-| 🔥 | **This Is Fine** | Original illustrated flames around the frame and a calm speech bubble. |
-| 🏆 | **Mission Passed** | A game-style success title card. |
+| 🔥 | **This Is Fine** | Face-tracked hat, coffee mug, flames and a calm speech bubble. |
+| 🏆 | **Mission Passed** | Sunglasses on your eyes, Mission Passed / Respect ++ and the GTA completion sting. |
 
 Plus *Main Character Energy* and *Plot Twist* variants. New effects can be added as small
 JSON collections, without writing code — see [Effect authoring](docs/EFFECT_AUTHORING.md).
@@ -52,7 +52,7 @@ SnapMeet wraps getUserMedia (only when you've switched it on)
         │                                                                          │
         └── camera frames ─► WebGL2 effects renderer ─► processed video track ─────┴─► Meet
                    │                    ▲
-                   └─► MediaPipe (in a worker): person mask + hand landmarks
+                   └─► MediaPipe (in a worker): person mask + hand/face landmarks
 ```
 
 * Runs inside the Meet tab — the effect is part of the video Meet sends, so the other
@@ -128,7 +128,7 @@ The full checklist is in [docs/FEASIBILITY.md](docs/FEASIBILITY.md#manual-meet-v
 ## 🔒 Privacy
 
 * Video is processed **on your device**. It is never recorded, uploaded or stored.
-* Your microphone and screen sharing are never modified.
+* Meme clips are mixed into microphone streams locally. Meet mute also mutes the clips. Screen sharing is never modified.
 * Room captures and custom backgrounds live in memory for that tab only.
 * No analytics, no accounts. Opening the popup never turns on your camera.
 * The only optional network request is a remote effect collection *you* configure.
@@ -190,7 +190,7 @@ Progress and next steps: [TASKS.md](TASKS.md) · Results: [docs/TEST_RESULTS.md]
 * SnapMeet must be on before Meet opens your camera (or toggle the camera afterwards).
 * The empty-room background is a still photo; moving the camera or changing the light means recapturing.
 * Dust Away briefly freezes your silhouette at the snap while it dissolves (an artistic choice).
-* Captions look mirrored in *your* self-view because Meet mirrors it; others see them correctly.
+* Local SnapMeet video elements receive a mirror correction; outgoing captions retain normal orientation.
 * Uses system fonts; on machines without Impact/Didot, fallbacks are used.
 
 ## 🤝 Contributing
@@ -202,5 +202,26 @@ and snap-detection trial data.
 ## ⚖️ Notes
 
 SnapMeet is an independent project and is **not affiliated with or endorsed by Google**.
-"Google Meet" is a trademark of Google LLC. All effect visuals are original; meme names are
-used as references only. Third-party software and models: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+"Google Meet" is a trademark of Google LLC. Visual props are procedural; bundled third-party meme sound sources and variant choices are recorded in `public/audio/sources.json`. Third-party software and models: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Gesture, face and sound update (not tested)
+
+All ten bundled memes have hand controls. Open **Gestures** for the pose list and to
+switch controls on/off. Hold a pose for about 280 ms, then relax before repeating it.
+Snap can still play any selected entry in the **Snap plays** dropdown. Raise both palms
+to return while vanished. Existing snap/palms preferences are preserved on upgrade;
+new installations enable them by default.
+
+Props track your face, including tilt and scale. The cinema jacket is a procedural 2D
+overlay positioned from your chin; it is not a body mesh or photorealistic clothing swap.
+Face loss removes props rather than leaving glasses floating on another part of the frame.
+
+**Setup ? Meme sounds** controls outgoing sound volume. Enable SnapMeet before Meet
+acquires the microphone; after upgrading, reload the extension and rejoin the call.
+Sound plays through the outgoing microphone track, not your speakers. Keep the Meet
+microphone unmuted to transmit it. The playground currently needs a microphone-bearing
+stream for outgoing sound; its video-only preview does not play sounds locally.
+
+Sources and chosen sound variants: [meme implementation notes](docs/MEME_UPDATE.md).
+These changes have not been built, typechecked, linted, or tested, at the user's request.
+Earlier test results in this repository apply to the previous implementation only.

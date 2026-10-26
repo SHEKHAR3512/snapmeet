@@ -1,3 +1,4 @@
+import type { BodyAnchor, FaceAnchor } from '../vision/types';
 import type { EffectTemplate } from '../catalog/schema';
 import { EFFECT_FACTORIES } from '../effects/registry';
 import { SpriteRenderer } from '../effects/sprites';
@@ -32,6 +33,9 @@ export interface BackgroundSnapshot {
 }
 
 export interface RenderState {
+  face?: FaceAnchor | null;
+  body?: BodyAnchor | null;
+  hands?: Array<{ x: number; y: number; radius: number }>;
   now: number;
   session: SessionSnapshot;
   mask: MaskSnapshot | null;
@@ -168,6 +172,9 @@ export class FrameRenderer {
     }
 
     const inputs: FrameInputs = {
+      face: state.face,
+      body: state.body,
+      hands: state.hands,
       video: this.videoTex,
       mask: state.mask ? this.maskTex : null,
       maskInfo: state.mask ? { ...state.mask.info, ageMs: state.now - state.mask.at } : null,

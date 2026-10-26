@@ -11,9 +11,10 @@ uniform sampler2D u_video;
 uniform float u_live;
 uniform float u_zoom;
 uniform float u_desat;
+uniform vec2 u_center;
 void main() {
   vec2 uv = img(v_uv);
-  vec2 s = 0.5 + (uv - 0.5) / u_zoom;
+  vec2 s = u_center + (uv - 0.5) / u_zoom;
   vec3 frozen = texture(u_frozen, s).rgb;
   frozen = mix(frozen, vec3(luma(frozen)), u_desat) * vec3(1.02, 1.0, 1.06);
   vec3 live = texture(u_video, uv).rgb;
@@ -36,7 +37,7 @@ export class ConfusedFreezeEffect extends ShaderEffect<'confused-freeze'> {
     this.frozen.bind();
     this.ctx.copy(run.inputs.video);
     this.ctx.bindScene();
-    this.head = run.inputs.maskInfo?.head ?? [0.5, 0.35];
+    this.head = run.inputs.face?.eyes ?? run.inputs.maskInfo?.head ?? [0.5, 0.35];
   }
 
   render(f: EffectFrame): void {
@@ -44,9 +45,12 @@ export class ConfusedFreezeEffect extends ShaderEffect<'confused-freeze'> {
     const D = this.durationOf(f);
     const t = f.elapsed;
     const live = ramp(t, D - 350, D);
-    const zoom = this.reducedMotion ? 1.02 : 1 + 0.06 * ramp(t, 0, D);
+    const zoom = this.reducedMotion ? 1.02 : 1 + 0.18 * ramp(t, 0, 160);
+    const half = 0.5 / zoom;
+    const center = this.head.map(v => Math.max(half, Math.min(1 - half, v)));
     this.program
       .use()
+      .f('u_center', center[0]!, center[1]!)
       .f('u_live', live)
       .f('u_zoom', zoom)
       .f('u_desat', 0.3)
@@ -64,7 +68,8 @@ export class ConfusedFreezeEffect extends ShaderEffect<'confused-freeze'> {
       stroke: '#1b1300',
       strokeWidth: 12,
     });
-    const [hx, hy] = this.head;
+    const hx = (this.head[0] - center[0]!) * zoom + 0.5;
+    const hy = (this.head[1] - center[1]!) * zoom + 0.5;
     for (let i = 0; i < count; i++) {
       const appear = 120 + i * 110;
       const s = easeOutBack(ramp(t, appear, appear + 260));
@@ -78,7 +83,7 @@ export class ConfusedFreezeEffect extends ShaderEffect<'confused-freeze'> {
       this.sprites.draw(q, { x, y, height: 0.08 * s * (i % 2 ? 0.8 : 1), rotation: rot, alpha: fade, outAspect: aspect });
     }
 
-    const capAlpha = Math.min(ramp(t, 300, 550), fade);
+    const capAlpha = Math.min(ramp(t, 0, 100), fade);
     if (capAlpha > 0) {
       const caption = this.sprites.text({
         text: p.caption ?? 'Aayein?',

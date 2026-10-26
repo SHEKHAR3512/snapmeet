@@ -34,3 +34,15 @@ Full hashes: `scripts/assets.lock.json` (verified on every build).
 
 TypeScript, Vite, @vitejs/plugin-react, Vitest, Playwright, ESLint, typescript-eslint,
 jsdom, @types/* — used to build and test; not included in `dist/`.
+
+
+## Face tracking and meme audio update
+
+MediaPipe Face Landmarker model: Google, Apache-2.0, downloaded from the versioned
+MediaPipe model bucket. URL and SHA-256 are pinned in `scripts/assets.lock.json`.
+
+The ten MP3 files in `public/audio/` are third-party meme clips, not SnapMeet original
+recordings. Exact download sources, descriptive variant names and SHA-256 hashes are
+in `public/audio/sources.json`. Underlying audio rights remain with their original
+owners. A public download or GitHub mirror does not establish a redistribution license.
+The previous original-work visual attribution does not cover these recordings.

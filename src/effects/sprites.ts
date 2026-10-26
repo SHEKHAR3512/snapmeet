@@ -34,6 +34,7 @@ export interface Sprite {
 }
 
 export interface DrawOpts {
+  holes?: Array<{ x: number; y: number; radius: number }>;
   /** Center in image space (0..1, y down). */
   x: number;
   y: number;
@@ -56,6 +57,7 @@ uniform vec2 u_half;
 uniform float u_rot;
 uniform float u_outAspect;
 out vec2 v_uv;
+out vec2 v_image;
 void main() {
   v_uv = vec2(a_pos.x * 0.5 + 0.5, 0.5 - a_pos.y * 0.5);
   vec2 p = a_pos * u_half;
@@ -65,6 +67,7 @@ void main() {
   p = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
   p.x /= u_outAspect;
   gl_Position = vec4(u_center + p, 0.0, 1.0);
+  v_image = vec2(gl_Position.x * 0.5 + 0.5, 0.5 - gl_Position.y * 0.5);
 }`;
 
 const SPRITE_FS = fragment(`
@@ -73,9 +76,16 @@ out vec4 o;
 uniform sampler2D u_tex;
 uniform float u_alpha;
 uniform vec3 u_tint;
+in vec2 v_image;
+uniform vec3 u_holeA;
+uniform vec3 u_holeB;
+uniform float u_aspect;
 void main() {
   vec4 c = texture(u_tex, v_uv);
-  o = vec4(c.rgb * u_tint, c.a * u_alpha);
+  float visible = 1.0;
+  if (u_holeA.z > 0.0) visible *= smoothstep(u_holeA.z * 0.8, u_holeA.z, length((v_image - u_holeA.xy) * vec2(u_aspect, 1.0)));
+  if (u_holeB.z > 0.0) visible *= smoothstep(u_holeB.z * 0.8, u_holeB.z, length((v_image - u_holeB.xy) * vec2(u_aspect, 1.0)));
+  o = vec4(c.rgb * u_tint, c.a * u_alpha * visible);
 }`);
 
 export class SpriteRenderer {
@@ -133,6 +143,9 @@ export class SpriteRenderer {
       .f('u_half', halfW, halfH)
       .f('u_rot', o.rotation ?? 0)
       .f('u_outAspect', o.outAspect)
+      .f('u_holeA', o.holes?.[0]?.x ?? 0, o.holes?.[0]?.y ?? 0, o.holes?.[0]?.radius ?? 0)
+      .f('u_holeB', o.holes?.[1]?.x ?? 0, o.holes?.[1]?.y ?? 0, o.holes?.[1]?.radius ?? 0)
+      .f('u_aspect', o.outAspect)
       .f('u_alpha', o.alpha ?? 1)
       .f('u_tint', t[0], t[1], t[2])
       .tex('u_tex', 0, sprite.tex);

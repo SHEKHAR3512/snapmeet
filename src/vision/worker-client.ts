@@ -58,7 +58,9 @@ export function createWorkerRuntime(worker: Worker, opts: VisionRuntimeOptions, 
       return new Promise<Extract<FromWorker, { type: 'result' }>>((res, rej) => {
         pending.set(id, { resolve: res, reject: rej });
         const [msg, transfer] = build(id);
-        post(msg, transfer);
+        try { post(msg, transfer); } catch (error) {
+          pending.delete(id); onDeadFrame?.close(); rej(error as Error);
+        }
       });
     };
 
@@ -79,7 +81,7 @@ export function createWorkerRuntime(worker: Worker, opts: VisionRuntimeOptions, 
         return r.hands ?? null;
       },
       close() {
-        dead ??= 'closed';
+        fail('closed');
         post({ type: 'close' });
         setTimeout(() => worker.terminate(), 500);
       },
@@ -87,4 +89,25 @@ export function createWorkerRuntime(worker: Worker, opts: VisionRuntimeOptions, 
 
     post({ type: 'init', opts });
   });
+}
+
+/** Separate workers prevent face/segmentation inference from delaying a snap frame. */
+export async function createSplitWorkerRuntime(makeWorker: () => Worker, opts: VisionRuntimeOptions): Promise<VisionRuntime> {
+  const results = await Promise.allSettled([
+    Promise.resolve().then(() => createWorkerRuntime(makeWorker(), { ...opts, taskMode: 'scene' })),
+    Promise.resolve().then(() => createWorkerRuntime(makeWorker(), { ...opts, taskMode: 'hands' })),
+  ]);
+  const scene = results[0]!, hands = results[1]!;
+  if (scene.status !== 'fulfilled' || hands.status !== 'fulfilled') {
+    for (const result of results) if (result.status === 'fulfilled') result.value.close();
+    throw new Error(results.filter(r => r.status === 'rejected').map(r => r.reason).join('; '));
+  }
+  return {
+    mode: 'worker',
+    get info() { return { ...scene.value.info, handsLoaded: hands.value.info.handsLoaded }; },
+    segment: (frame, ts) => scene.value.segment(frame, ts),
+    ensureHands: () => hands.value.ensureHands(),
+    detectHands: (frame, ts) => hands.value.detectHands(frame, ts),
+    close() { scene.value.close(); hands.value.close(); },
+  };
 }

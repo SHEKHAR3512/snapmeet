@@ -1,10 +1,10 @@
+import { MEME_CUES } from './meme-cues';
 import type { Attribution, EffectDefinition, EffectPack } from './schema';
 
 /**
  * Bundled V1 catalog. Every visual is an original procedural treatment rendered by the
- * engine; captions are short original text. No film footage, celebrity likeness, logos,
- * brand fonts or soundtracks are shipped. These are recognizable starter references,
- * not a verified trend ranking.
+ * engine with the current camera face. Bundled meme audio provenance is recorded in
+ * public/audio/sources.json; no celebrity face footage is substituted for the user.
  */
 export const BUILTIN_ATTRIBUTIONS: Attribution[] = [
   {
@@ -12,7 +12,7 @@ export const BUILTIN_ATTRIBUTIONS: Attribution[] = [
     kind: 'original',
     author: 'SnapMeet contributors',
     license: 'Original work bundled with the extension',
-    notes: 'Procedural shaders and text rendered at runtime; no third-party media.',
+    notes: 'Procedural visual artwork. Separate third-party sound provenance: public/audio/sources.json.',
   },
 ];
 
@@ -44,14 +44,14 @@ export const BUILTIN_EFFECTS: EffectDefinition[] = [
     id: 'absolute-cinema',
     template: 'cinema',
     title: 'Absolute Cinema',
-    description: 'Monochrome, letterbox bars, film grain and a title card.',
+    description: 'Your face in a tracked suit, monochrome film grain and the Absolute Cinema title.',
     regions: ['GLOBAL', 'US', 'IN'],
     languages: ['en'],
     tags: ['cinema', 'reaction'],
     durationMs: 4200,
     requires: [],
     assetIds: ['fx-film-grain'],
-    parameters: { title: 'ABSOLUTE CINEMA', barSize: 0.12, grain: 0.18 },
+    parameters: { title: 'ABSOLUTE CINEMA', barSize: 0.05, grain: 0.06 },
   },
   {
     ...base,
@@ -93,7 +93,7 @@ export const BUILTIN_EFFECTS: EffectDefinition[] = [
     durationMs: 3200,
     requires: [],
     assetIds: ['fx-question-marks'],
-    parameters: { caption: 'Aayein?', questionMarks: 5 },
+    parameters: { caption: 'Aayein?', questionMarks: 2 },
   },
   {
     ...base,
@@ -114,7 +114,7 @@ export const BUILTIN_EFFECTS: EffectDefinition[] = [
     id: 'this-is-fine',
     template: 'illustrated-fire',
     title: 'This Is Fine',
-    description: 'Original procedural flames around the frame and a calm caption.',
+    description: 'Your face under the little hat, a coffee mug, flames and a calm speech bubble.',
     regions: ['US', 'GLOBAL'],
     languages: ['en'],
     tags: ['fire', 'chaos', 'calm'],
@@ -128,14 +128,14 @@ export const BUILTIN_EFFECTS: EffectDefinition[] = [
     id: 'mission-passed',
     template: 'success-title',
     title: 'Mission Passed',
-    description: 'A game-inspired success title card.',
+    description: 'Sunglasses drop onto your eyes with Mission Passed and Respect ++.',
     regions: ['GLOBAL', 'US', 'IN'],
     languages: ['en'],
     tags: ['win', 'game'],
     durationMs: 4000,
     requires: [],
     assetIds: [],
-    parameters: { title: 'MISSION PASSED', subtitle: 'RESPECT +' },
+    parameters: { title: 'mission passed!', subtitle: 'RESPECT ++' },
   },
   {
     ...base,
@@ -166,6 +166,8 @@ export const BUILTIN_EFFECTS: EffectDefinition[] = [
     parameters: { caption: 'PLOT TWIST', punches: 2, tint: false, maxZoom: 1.35 },
   },
 ];
+
+for (const effect of BUILTIN_EFFECTS) effect.durationMs = MEME_CUES[effect.id]?.visualMs ?? effect.durationMs;
 
 export const BUILTIN_PACK: EffectPack = {
   packId: 'snapmeet-builtin',

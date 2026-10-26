@@ -1,3 +1,4 @@
+import { drawAccessory } from '../accessories';
 import { fragment } from '../../engine/gl';
 import { ShaderEffect } from '../base';
 import { easeOutCubic, envelope, ramp } from '../easing';
@@ -35,7 +36,7 @@ export class CinemaEffect extends ShaderEffect<'cinema'> {
     const p = this.def.parameters;
     const D = this.durationOf(f);
     const t = f.elapsed;
-    const inMs = this.reducedMotion ? 900 : 450;
+    const inMs = this.reducedMotion ? 400 : 120;
     const env = envelope(t, D, inMs, 600);
     const bars = (p.barSize ?? 0.12) * easeOutCubic(env);
     // Grain re-seeds at 12 fps (static under reduced motion).
@@ -49,26 +50,18 @@ export class CinemaEffect extends ShaderEffect<'cinema'> {
       .f('u_res', f.inputs.width, f.inputs.height)
       .tex('u_video', 0, f.inputs.video);
     this.ctx.quad.draw();
+    drawAccessory(this.sprites, f, 'suit', env);
 
-    const titleAlpha = Math.min(ramp(t, 350, 950), 1 - ramp(t, D - 600, D - 150));
-    if (titleAlpha > 0) {
-      const sprite = this.sprites.text({
-        text: p.title ?? 'ABSOLUTE CINEMA',
-        font: 'serif',
-        weight: 700,
-        fill: '#f4f1ea',
-        letterSpacingEm: 0.12,
-        shadow: { color: 'rgba(0,0,0,0.85)', blur: 18 },
+    const titleAlpha = Math.min(ramp(t, 80, 220), 1 - ramp(t, D - 450, D));
+    const title = p.title ?? 'ABSOLUTE CINEMA';
+    const lines = title === 'ABSOLUTE CINEMA' ? ['ABSOLUTE', 'CINEMA'] : [title];
+    lines.forEach((line, index) => {
+      const sprite = this.sprites.text({ text: line, font: 'sans', weight: 900,
+        fill: '#ffffff', stroke: '#111111', strokeWidth: 2,
+        shadow: { color: 'rgba(0,0,0,0.8)', blur: 8 },
       });
-      const rise = this.reducedMotion ? 0 : (1 - easeOutCubic(ramp(t, 350, 1100))) * 0.02;
-      this.sprites.draw(sprite, {
-        x: 0.5,
-        y: 0.8 + rise,
-        height: 0.095,
-        maxWidth: 0.9,
-        alpha: titleAlpha,
-        outAspect: this.outAspect(f),
-      });
-    }
+      this.sprites.draw(sprite, { x: 0.5, y: lines.length === 1 ? 0.82 : 0.75 + index * 0.115,
+        height: 0.11, maxWidth: 0.84, alpha: titleAlpha, outAspect: this.outAspect(f) });
+    });
   }
 }

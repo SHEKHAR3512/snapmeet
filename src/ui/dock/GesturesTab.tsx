@@ -1,3 +1,4 @@
+import { POSE_EFFECTS } from '../../gestures/pose-detector';
 import { CALIBRATION_ATTEMPTS } from '../../gestures/calibration';
 import { thresholdsFor } from '../../gestures/snap-detector';
 import type { ControllerApi, UiState } from '../state';
@@ -16,6 +17,12 @@ export function GesturesTab({ api, ui }: { api: ControllerApi; ui: UiState }) {
 
   return (
     <div>
+      <section className="sm-section">
+        <h3>Meme gestures</h3>
+        <Toggle id="sm-poses" label="Enable meme hand poses" checked={settings.poseEnabled} onChange={(v) => set({ poseEnabled: v })} />
+        <p className="sm-hint">Hold a pose briefly, then relax your hand before the next meme. Keep your entire hand visible. Four fingers means thumb tucked; open palm means thumb out.</p>
+        {POSE_EFFECTS.map(([pose, id]) => <div className="sm-row" key={id}><span>{pose}</span><span>{definitions.find(d => d.id === id)?.title ?? id}</span></div>)}
+      </section>
       <section className="sm-section" aria-labelledby="sm-snap-h">
         <h3 id="sm-snap-h">
           Finger snap <span className="sm-exp">Experimental</span>
@@ -59,7 +66,7 @@ export function GesturesTab({ api, ui }: { api: ControllerApi; ui: UiState }) {
           <div style={{ flex: 1 }}>
             <div className="sm-row" style={{ minHeight: 24 }}>
               <span>
-                {!settings.snapEnabled && !settings.palmsEnabled && !cal?.active
+                {!settings.poseEnabled && !settings.snapEnabled && !settings.palmsEnabled && !cal?.active
                   ? 'Hand tracking is off'
                   : status?.vision === 'loading'
                     ? 'Loading hand tracking…'
@@ -70,7 +77,9 @@ export function GesturesTab({ api, ui }: { api: ControllerApi; ui: UiState }) {
                         : 'No hand in view'}
               </span>
               <span className="sm-chip">
-                {recentGesture?.gesture === 'snap'
+                {recentGesture?.gesture === 'pose'
+                  ? recentGesture.detail
+                  : recentGesture?.gesture === 'snap'
                   ? 'Snap!'
                   : recentGesture?.gesture === 'near-miss'
                     ? recentGesture.detail === 'slow-release'

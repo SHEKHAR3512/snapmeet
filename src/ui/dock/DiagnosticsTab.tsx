@@ -19,6 +19,8 @@ export function DiagnosticsTab({ api, ui }: { api: ControllerApi; ui: UiState })
     ['Pipeline time', d ? `p50 ${d.pipelineMsP50} ms · p95 ${d.pipelineMsP95} ms` : '—'],
     ['Segmentation', d ? `${d.segmentationHz}/s · p50 ${d.segmentationMs} ms · p95 ${d.segmentationMsP95} ms` : '—'],
     ['Hand tracking', d ? `${d.handsHz}/s · p50 ${d.handsMs} ms · p95 ${d.handsMsP95} ms` : '—'],
+    ['Audio', d?.audio ? `${d.audio.state} ? ${d.audio.ready}/10 clips ? ${d.audio.outputs} microphone tracks ? ${d.audio.transmitting ? 'unmuted mix' : 'muted / no mic'}` : 'Not initialized'],
+    ['Audio error', d?.audio?.error ?? 'None'],
     ['Dropped frames', String(d?.droppedFrames ?? 0)],
     ['Frame path', d?.frameSource ?? '—'],
     ['WebGL', s?.webgl ?? '—'],

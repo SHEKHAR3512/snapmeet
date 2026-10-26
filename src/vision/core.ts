@@ -1,4 +1,4 @@
-import { HandLandmarker, ImageSegmenter } from '@mediapipe/tasks-vision';
+import { FaceLandmarker, HandLandmarker, ImageSegmenter, PoseLandmarker } from '@mediapipe/tasks-vision';
 import type { HandObservation, HandsSample } from '../gestures/landmarks';
 import type { SegmentationOutput, VisionInfo, VisionRuntimeOptions } from './types';
 
@@ -45,8 +45,8 @@ export async function createVisionCore(opts: VisionRuntimeOptions): Promise<Visi
       outputCategoryMask: false,
     });
   };
-  let segmenter: ImageSegmenter;
-  try {
+  let segmenter: ImageSegmenter | null = null;
+  if (opts.taskMode !== 'hands') try {
     segmenter = await createSegmenter(delegate);
   } catch (e) {
     if (delegate === 'CPU') throw e;
@@ -54,9 +54,42 @@ export async function createVisionCore(opts: VisionRuntimeOptions): Promise<Visi
     segmenter = await createSegmenter(delegate);
   }
 
-  const labels = safeLabels(segmenter);
+  let face: FaceLandmarker | null = null;
+  if (opts.faceModelUrl && opts.taskMode !== 'hands') {
+    try {
+      prepare();
+      face = await FaceLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: opts.faceModelUrl, delegate },
+        runningMode: 'VIDEO', numFaces: 1,
+        minFaceDetectionConfidence: 0.5, minFacePresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+    } catch (error) {
+      try {
+        prepare();
+        face = await FaceLandmarker.createFromOptions(fileset, {
+          baseOptions: { modelAssetPath: opts.faceModelUrl, delegate: 'CPU' },
+          runningMode: 'VIDEO', numFaces: 1,
+        });
+      } catch { console.warn('[SnapMeet] Face accessories unavailable:', error); }
+    }
+  }
+  let pose: PoseLandmarker | null = null;
+  if (opts.poseModelUrl && opts.taskMode !== 'hands') {
+    const createPose = (d: 'GPU' | 'CPU') => {
+      prepare();
+      return PoseLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: opts.poseModelUrl!, delegate: d },
+        runningMode: 'VIDEO', numPoses: 1, outputSegmentationMasks: false,
+      });
+    };
+    try { pose = await createPose(delegate); }
+    catch { try { pose = await createPose('CPU'); } catch (error) { console.warn('[SnapMeet] Shoulder tracking unavailable:', error); } }
+  }
+  const labels = segmenter ? safeLabels(segmenter) : [];
   let hands: HandLandmarker | null = null;
   let handsLoading: Promise<void> | null = null;
+  let closed = false;
   let lastSegTs = -1;
   let lastHandTs = -1;
   const info: VisionInfo = {
@@ -82,9 +115,10 @@ export async function createVisionCore(opts: VisionRuntimeOptions): Promise<Visi
     }
   };
 
-  return {
+  const core: VisionCore = {
     info,
     segment(input, timestampMs): SegmentationOutput | null {
+      if (!segmenter) return null;
       const ts = Math.max(timestampMs, lastSegTs + 0.01);
       lastSegTs = ts;
       const result = segmenter.segmentForVideo(input, ts);
@@ -94,24 +128,54 @@ export async function createVisionCore(opts: VisionRuntimeOptions): Promise<Visi
         if (info.personMaskIndex < 0) resolvePersonIndex(masks.length);
         const mask = masks[info.personMaskIndex];
         if (!mask) return null;
-        return { confidence: new Float32Array(mask.getAsFloat32Array()), width: mask.width, height: mask.height };
+        const confidence = new Float32Array(mask.getAsFloat32Array());
+        let points;
+        try { points = face?.detectForVideo(input, ts).faceLandmarks[0]; }
+        catch (error) { console.warn('[SnapMeet] Face tracking failed:', error); face?.close(); face = null; }
+        let body = null;
+        if (pose) {
+          try {
+            const result = pose.detectForVideo(input, ts);
+            const shoulders = result.landmarks[0];
+            const a = shoulders?.[12], b = shoulders?.[11];
+            if (a && b && (a.visibility ?? 0) > 0.6 && (b.visibility ?? 0) > 0.6) {
+              body = { shoulders: [(a.x + b.x) / 2, (a.y + b.y) / 2] as [number, number],
+                width: Math.hypot((b.x - a.x) * input.width / input.height, b.y - a.y),
+                rotation: -Math.atan2(b.y - a.y, (b.x - a.x) * input.width / input.height) };
+            }
+            result.close();
+          } catch (error) { console.warn('[SnapMeet] Shoulder tracking failed:', error); pose.close(); pose = null; }
+        }
+        const left = points?.[33], right = points?.[263], chin = points?.[152], forehead = points?.[10];
+        return { body, confidence, width: mask.width, height: mask.height,
+          face: left && right && chin && forehead ? {
+            eyes: [(left.x + right.x) / 2, (left.y + right.y) / 2],
+            chin: [chin.x, chin.y], forehead: [forehead.x, forehead.y],
+            width: Math.hypot((right.x - left.x) * input.width / input.height, right.y - left.y) * 1.48,
+            height: Math.hypot((chin.x - forehead.x) * input.width / input.height, chin.y - forehead.y),
+            rotation: -Math.atan2(right.y - left.y, (right.x - left.x) * input.width / input.height),
+          } : null,
+        };
       } finally {
         result.close();
       }
     },
     ensureHands(): Promise<void> {
       handsLoading ??= (async () => {
-        prepare();
-        hands = await HandLandmarker.createFromOptions(fileset, {
-          baseOptions: { modelAssetPath: opts.handModelUrl, delegate },
-          runningMode: 'VIDEO',
-          numHands: 2,
-          minHandDetectionConfidence: 0.6,
-          minHandPresenceConfidence: 0.5,
-          minTrackingConfidence: 0.5,
-        });
+        const create = (d: 'GPU' | 'CPU') => {
+          prepare();
+          return HandLandmarker.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath: opts.handModelUrl, delegate: d },
+            runningMode: 'VIDEO', numHands: 2,
+            minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5,
+            minTrackingConfidence: 0.5,
+          });
+        };
+        try { hands = await create(delegate); }
+        catch (error) { if (delegate === 'CPU') throw error; hands = await create('CPU'); }
+        if (closed) { hands.close(); hands = null; return; }
         info.handsLoaded = true;
-      })();
+      })().catch(error => { handsLoading = null; throw error; });
       return handsLoading;
     },
     detectHands(input, timestampMs): HandsSample | null {
@@ -132,11 +196,16 @@ export async function createVisionCore(opts: VisionRuntimeOptions): Promise<Visi
       return { t: timestampMs, hands: out };
     },
     close(): void {
-      segmenter.close();
+      closed = true;
+      face?.close();
+      pose?.close();
+      segmenter?.close();
       (hands as HandLandmarker | null)?.close();
       hands = null;
     },
   };
+  if (opts.taskMode === 'hands') await core.ensureHands();
+  return core;
 }
 
 function safeLabels(s: ImageSegmenter): string[] {

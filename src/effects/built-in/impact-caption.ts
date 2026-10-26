@@ -8,12 +8,13 @@ in vec2 v_uv;
 out vec4 o;
 uniform sampler2D u_video;
 uniform vec2 u_offset;
+uniform vec2 u_center;
 uniform float u_zoom;
 uniform float u_amount;
 uniform vec3 u_tint;
 void main() {
   vec2 uv = img(v_uv);
-  vec2 s = 0.5 + (uv - 0.5) / u_zoom + u_offset;
+  vec2 s = u_center + (uv - 0.5) / u_zoom + u_offset;
   vec3 c = texture(u_video, clamp(s, 0.0, 1.0)).rgb;
   float l = luma(c);
   c = mix(c, mix(vec3(l), c, 0.7) * 1.08, u_amount);
@@ -48,8 +49,11 @@ export class ImpactCaptionEffect extends ShaderEffect<'impact-caption'> {
     }
     const hue = (p.hue ?? 0) / 360;
     const tint = hslToRgb(hue, 0.85, 0.42);
+    const focus = f.inputs.face?.eyes ?? [0.5, 0.5];
+    const half = 0.5 / zoom;
     this.program
       .use()
+      .f('u_center', Math.max(half, Math.min(1 - half, focus[0]!)), Math.max(half, Math.min(1 - half, focus[1]!)))
       .f('u_offset', ox, oy)
       .f('u_zoom', zoom)
       .f('u_amount', amount)

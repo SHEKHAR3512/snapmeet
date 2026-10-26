@@ -37,7 +37,10 @@
         "wasm/vision_wasm_internal.js",
         "wasm/vision_wasm_internal.wasm",
         "models/selfie_segmenter_landscape.tflite",
-        "models/hand_landmarker.task"
+        "models/hand_landmarker.task",
+        "models/face_landmarker.task",
+        "models/pose_landmarker_lite.task",
+        "audio/*"
       ],
       "matches": ["https://meet.google.com/*"]
     }

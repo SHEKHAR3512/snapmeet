@@ -9,7 +9,24 @@ export interface VisionInfo {
   handsLoaded: boolean;
 }
 
+export interface FaceAnchor {
+  eyes: [number, number];
+  chin: [number, number];
+  forehead: [number, number];
+  width: number;
+  height: number;
+  rotation: number;
+}
+
+export interface BodyAnchor {
+  shoulders: [number, number];
+  width: number;
+  rotation: number;
+}
+
 export interface SegmentationOutput {
+  body?: BodyAnchor | null;
+  face?: FaceAnchor | null;
   confidence: Float32Array;
   width: number;
   height: number;
@@ -30,6 +47,7 @@ export interface VisionRuntime {
 }
 
 export interface VisionRuntimeOptions {
+  taskMode?: 'scene' | 'hands';
   /** URL of vision_wasm_internal.wasm. */
   wasmBinaryUrl: string;
   /**
@@ -39,11 +57,13 @@ export interface VisionRuntimeOptions {
   wasmLoaderUrl?: string;
   segmenterModelUrl: string;
   handModelUrl: string;
+  faceModelUrl?: string;
+  poseModelUrl?: string;
   preferGpu?: boolean;
 }
 
 /** Inference input sizes (width; height follows the source aspect ratio). */
-export const SEG_INPUT_WIDTH = 256;
+export const SEG_INPUT_WIDTH = 480;
 export const HAND_INPUT_WIDTH = 640;
 
 export const VISION_FACTORY_KEY = Symbol.for('snapmeet.vision.factory');
